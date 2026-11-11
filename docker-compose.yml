@@ -1,0 +1,26 @@
+# 本機開發用。正式環境的設定放在 deploy/（D03）。
+# 啟動資料庫：docker compose up -d db
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      # 值來自同目錄的 .env（docker compose 會自動讀取）
+      POSTGRES_DB: ${DB_NAME:?請先建立 .env，參考 .env.example}
+      POSTGRES_USER: ${DB_USERNAME:?請先建立 .env，參考 .env.example}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?請先建立 .env，參考 .env.example}
+      TZ: Asia/Taipei
+    ports:
+      # 只綁定 127.0.0.1，同一個網路的其他電腦連不到這個資料庫
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    volumes:
+      # 資料存在 Docker volume，容器刪掉資料還在
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  db-data:
