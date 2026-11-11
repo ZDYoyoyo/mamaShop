@@ -125,7 +125,7 @@ mamaShop/
 - [x] **B01 初始化後端**：start.spring.io 產生 `backend/`；本機 `docker-compose.yml` 先放 PostgreSQL；設定讀環境變數。完成條件：能啟動並連上資料庫
 - [x] **B02 Schema**：Flyway `V1__init_schema.sql` 建表、外鍵、唯一索引、CHECK 限制；測試資料放 `db/testdata/R__seed_data.sql`，只在 `dev` profile 載入，正式環境不會寫入假商品。完成條件：啟動後自動建表
 - [x] **B03 Entity 與 Repository**：狀態用 Enum（`EnumType.STRING`），`ddl-auto=validate`
-- [ ] **B04 共用基礎**：統一回應格式、自訂例外、全域例外處理、參數驗證錯誤訊息
+- [x] **B04 共用基礎**：統一回應格式、自訂例外、全域例外處理、參數驗證錯誤訊息
 - [ ] **B05 商品查詢 API**：分類列表、商品列表（分頁、分類、關鍵字）、商品詳情、可用的運送方式與運費，只回 DTO
 - [ ] **B06 會員與 JWT**：註冊（BCrypt）、登入回 JWT、JWT Filter、路徑權限、預設 ADMIN 帳號（密碼讀環境變數）、CORS 允許本機前端。完成條件：未登入 401、權限不足 403
 - [ ] **B07 後台商品管理＋圖片上傳**：分類 CRUD、商品新增／修改／上下架、運送方式與運費設定；圖片存到伺服器目錄，限制檔案類型與大小，檔名用 UUID。完成條件：上傳後前台能顯示圖片
