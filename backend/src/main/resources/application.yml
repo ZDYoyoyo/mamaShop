@@ -26,3 +26,19 @@ spring:
       ddl-auto: validate
     # 關閉 Open Session In View：不讓資料庫連線一路開到 Controller 回應結束
     open-in-view: false
+
+# ===== 本專案自訂設定（對應 com.mamashop.security / user 套件裡的 *Properties 類別）=====
+app:
+  jwt:
+    # 簽章用的密鑰，至少 32 字元；沒設定時啟動會失敗（JwtService 會檢查）
+    secret: ${JWT_SECRET:}
+    # token 有效期間，格式例如 1d、12h、30m
+    expiration: ${JWT_EXPIRATION:1d}
+  cors:
+    # 允許呼叫 API 的前端網址，多個用逗號分隔
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  admin:
+    # 預設管理員：啟動時若這個 email 還不存在就建立。沒設定則略過
+    email: ${ADMIN_EMAIL:}
+    password: ${ADMIN_PASSWORD:}
+    name: ${ADMIN_NAME:管理員}
