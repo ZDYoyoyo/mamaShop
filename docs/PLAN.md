@@ -33,7 +33,7 @@
 
 | 層 | 選擇 |
 | --- | --- |
-| 後端 | Java 21、Spring Boot 3.x、Maven、Spring Data JPA、PostgreSQL、Flyway、Spring Security＋JWT |
+| 後端 | Java 21、Spring Boot 4.x、Maven、Spring Data JPA、PostgreSQL、Flyway、Spring Security＋JWT |
 | 前端 | Vue 3、Vite、Vue Router、Pinia、Axios、Element Plus（後台元件） |
 | 測試 | JUnit 5、Mockito、MockMvc |
 | 部署 | Docker Compose、Nginx（靜態檔＋反向代理）、Let's Encrypt、GitHub Actions |
@@ -122,7 +122,7 @@ mamaShop/
 每個任務開一個分支（例如 `feature/b05-product-api`），完成後發 PR 再合併。
 
 - [x] **B00 建立 repo**：monorepo 結構、`.gitignore`、放入本檔與 `CLAUDE.md`
-- [ ] **B01 初始化後端**：start.spring.io 產生 `backend/`；本機 `docker-compose.yml` 先放 PostgreSQL；設定讀環境變數。完成條件：能啟動並連上資料庫
+- [x] **B01 初始化後端**：start.spring.io 產生 `backend/`；本機 `docker-compose.yml` 先放 PostgreSQL；設定讀環境變數。完成條件：能啟動並連上資料庫
 - [ ] **B02 Schema**：Flyway `V1__init_schema.sql` 建表、外鍵、唯一索引；`V2__seed_data.sql` 放測試資料。完成條件：啟動後自動建表
 - [ ] **B03 Entity 與 Repository**：狀態用 Enum（`EnumType.STRING`），`ddl-auto=validate`
 - [ ] **B04 共用基礎**：統一回應格式、自訂例外、全域例外處理、參數驗證錯誤訊息

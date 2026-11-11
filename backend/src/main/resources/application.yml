@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: mamashop
+
+  # 本機開發時，從 repo 根目錄的 .env 讀取設定（和 docker compose 共用同一份）。
+  # 檔案不存在也不會報錯（optional）；正式環境改由容器的環境變數提供。
+  config:
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:../.env[.properties]
+
+  datasource:
+    # 非機密的連線資訊給本機預設值；帳號密碼不給預設值。
+    # 沒設定時 Spring 會把 "${DB_USERNAME}" 字面當帳號，啟動時連線失敗，錯誤訊息裡看得到這串字
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:mamashop}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+  jpa:
+    hibernate:
+      # Schema 只由 Flyway 管理，Hibernate 只檢查 Entity 和資料表是否一致
+      ddl-auto: validate
+    # 關閉 Open Session In View：不讓資料庫連線一路開到 Controller 回應結束
+    open-in-view: false
