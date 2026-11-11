@@ -16,6 +16,7 @@
 - 只做指定的任務，不要順手加任務範圍外的功能。
 - B08（建立訂單）我想自己寫，請只在我要求時提供提示或做 code review。
 - 每個任務完成後，列出改了哪些檔案、怎麼驗證，並建議 commit message。
+- 每個任務完成後，把和 PLAN 不同的決定、刻意沒做的、之後要注意的事記錄到 `docs/NOTES.md`。
 
 ## 程式慣例
 - 後端依業務模組分包（user、product、category、order），模組內分 controller／service／repository／entity／dto。
