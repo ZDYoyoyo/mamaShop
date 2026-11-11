@@ -9,7 +9,7 @@ review PR 時搭配這份看；上線前（D08）再整份檢查一次。
 
 ## 尚未 review 的 PR
 
-PR #1–#7 已 merge，但你還沒看過。建議依序看，每個 PR 的重點列在下方各任務。
+PR #1–#9 已 merge，但你還沒看過。B 系列完成後一起研究。建議依序看，每個 PR 的重點列在下方各任務。
 
 | PR | 任務 | 狀態 |
 |---|---|---|
@@ -20,7 +20,8 @@ PR #1–#7 已 merge，但你還沒看過。建議依序看，每個 PR 的重�
 | [#5](https://github.com/ZDYoyoyo/mamaShop/pull/5) | B03 Entity | 已 merge，未 review |
 | [#6](https://github.com/ZDYoyoyo/mamaShop/pull/6) | B04 共用基礎 | 已 merge，未 review |
 | [#7](https://github.com/ZDYoyoyo/mamaShop/pull/7) | B05 商品查詢 API | 已 merge，未 review |
-| [#8](https://github.com/ZDYoyoyo/mamaShop/pull/8) | B06 會員與 JWT | **未 merge** |
+| [#8](https://github.com/ZDYoyoyo/mamaShop/pull/8) | B06 會員與 JWT | 已 merge，未 review |
+| [#9](https://github.com/ZDYoyoyo/mamaShop/pull/9) | 新增本文件 | 已 merge，未 review |
 
 ---
 
@@ -65,6 +66,9 @@ PR #1–#7 已 merge，但你還沒看過。建議依序看，每個 PR 的重�
 
 ### 和 B08 有關的限制
 
+ℹ️ B08 原本計畫自己寫，後來改由 Claude 實作（B 系列完成後再整體研究）。
+
+
 - `order_items` 有 `UNIQUE (order_id, product_id)`：購物車同一商品出現兩次要先合併數量
 - `orders.status` 沒有預設值，建立時要明確設定 `PENDING_CONFIRM`
 - `total_amount = items_amount + shipping_fee`、`subtotal = unit_price * quantity` 都是**完全相等**的 CHECK，`BigDecimal` 計算要精確
@@ -95,7 +99,7 @@ PR #1–#7 已 merge，但你還沒看過。建議依序看，每個 PR 的重�
 - ℹ️ 不存在的 `categoryId` 回傳空列表，不是 404
 - ℹ️ Windows cmd 的 curl 送中文參數會亂碼，搜尋功能請用 Swagger UI（B13）或前端測
 
-## B06 會員與 JWT（PR #8，未 merge）
+## B06 會員與 JWT
 
 - ℹ️ **jjwt 0.13 + jjwt-gson**：jjwt 的 Jackson 模組還是 Jackson 2，為了不和 Spring Boot 4 的 Jackson 3 混用，改用 Gson 模組
 - ℹ️ **401 和 404**：沒登入時打不存在的路徑會回 401，不是 404（Security 先擋）
