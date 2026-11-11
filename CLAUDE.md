@@ -2,7 +2,7 @@
 
 ## 專案說明
 家人實際使用的全端電商網站，同時是我的求職作品集。
-完整計畫與任務清單在 `docs/PLAN.md`，任務編號 B（後端）、F（前台）、A（後台）、D（部署）、R（Redis）、M（RabbitMQ）。一次只做一個任務。
+完整計畫與任務清單在 `docs/PLAN.md`，任務編號 B（後端）、F（前台）、A（後台）、D（部署）、R（Redis）、M（RabbitMQ）、P（金流與物流串接）。一次只做一個任務。
 
 ## 技術棧
 - 後端（`backend/`）：Java 21、Spring Boot 3.x、Maven、Spring Data JPA、PostgreSQL、Flyway、Spring Security＋JWT、JUnit 5、Mockito
