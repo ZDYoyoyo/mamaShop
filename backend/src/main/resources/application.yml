@@ -9,6 +9,10 @@ spring:
       - optional:file:.env[.properties]
       - optional:file:../.env[.properties]
 
+  profiles:
+    # 本機在 .env 設定 APP_PROFILE=dev；正式環境不設定，就不會載入 application-dev.yml（例如測試資料）
+    active: ${APP_PROFILE:}
+
   datasource:
     # 非機密的連線資訊給本機預設值；帳號密碼不給預設值。
     # 沒設定時 Spring 會把 "${DB_USERNAME}" 字面當帳號，啟動時連線失敗，錯誤訊息裡看得到這串字

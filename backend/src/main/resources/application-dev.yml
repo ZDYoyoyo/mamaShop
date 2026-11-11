@@ -1,0 +1,5 @@
+# 本機開發設定：在 .env 設定 APP_PROFILE=dev 時載入
+spring:
+  flyway:
+    # 除了正式 schema，再多載入測試資料（db/testdata 只有開發環境會用到）
+    locations: classpath:db/migration,classpath:db/testdata
