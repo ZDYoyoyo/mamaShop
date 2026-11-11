@@ -28,7 +28,7 @@ mamaShop/
 需要：Java 21、Docker（Maven 不用另外裝，用專案內附的 `mvnw`）
 
 ```bash
-# 1. 建立本機設定檔，視需要修改密碼
+# 1. 建立本機設定檔，修改密碼並產生 JWT_SECRET（openssl rand -base64 48）
 cp .env.example .env
 
 # 2. 啟動 PostgreSQL
@@ -40,4 +40,4 @@ cd backend && ./mvnw spring-boot:run
 
 後端測試需要資料庫在執行中：`cd backend && ./mvnw test`
 
-`.env` 設定 `APP_PROFILE=dev` 時會自動載入測試商品。想把本機資料庫清空重建：`docker compose down -v`（`-v` 會刪除資料庫的 volume），再重新 `docker compose up -d db`。
+啟動時會依 `.env` 的 `ADMIN_EMAIL`／`ADMIN_PASSWORD` 建立預設管理員（已存在則略過）。`.env` 設定 `APP_PROFILE=dev` 時會自動載入測試商品。想把本機資料庫清空重建：`docker compose down -v`（`-v` 會刪除資料庫的 volume），再重新 `docker compose up -d db`。

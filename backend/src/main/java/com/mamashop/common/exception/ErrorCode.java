@@ -16,7 +16,12 @@ public enum ErrorCode {
     NOT_FOUND(HttpStatus.NOT_FOUND, "找不到資料"),
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "不支援此請求方法"),
     CONFLICT(HttpStatus.CONFLICT, "資料已被其他人修改，請重新整理後再試"),
-    INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "系統發生錯誤，請稍後再試");
+    INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "系統發生錯誤，請稍後再試"),
+
+    // ===== 會員 =====
+    EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "此 Email 已經註冊過"),
+    // 不區分「帳號不存在」和「密碼錯誤」，避免被拿來試探哪些 Email 有註冊
+    INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "Email 或密碼錯誤");
 
     private final HttpStatus status;
     private final String defaultMessage;
