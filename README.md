@@ -39,3 +39,5 @@ cd backend && ./mvnw spring-boot:run
 ```
 
 後端測試需要資料庫在執行中：`cd backend && ./mvnw test`
+
+`.env` 設定 `APP_PROFILE=dev` 時會自動載入測試商品。想把本機資料庫清空重建：`docker compose down -v`（`-v` 會刪除資料庫的 volume），再重新 `docker compose up -d db`。
