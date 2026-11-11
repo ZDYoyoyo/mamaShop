@@ -44,7 +44,7 @@
 ## Repo 結構
 
 ```
-shop/
+mamaShop/
 ├── backend/           # Spring Boot
 ├── frontend/          # Vue 3（前台與後台同一個 app，用路由區分）
 ├── deploy/            # 正式環境的 docker-compose、Nginx 設定、備份腳本
@@ -121,7 +121,7 @@ shop/
 
 每個任務開一個分支（例如 `feature/b05-product-api`），完成後發 PR 再合併。
 
-- [ ] **B00 建立 repo**：monorepo 結構、`.gitignore`、放入本檔與 `CLAUDE.md`
+- [x] **B00 建立 repo**：monorepo 結構、`.gitignore`、放入本檔與 `CLAUDE.md`
 - [ ] **B01 初始化後端**：start.spring.io 產生 `backend/`；本機 `docker-compose.yml` 先放 PostgreSQL；設定讀環境變數。完成條件：能啟動並連上資料庫
 - [ ] **B02 Schema**：Flyway `V1__init_schema.sql` 建表、外鍵、唯一索引；`V2__seed_data.sql` 放測試資料。完成條件：啟動後自動建表
 - [ ] **B03 Entity 與 Repository**：狀態用 Enum（`EnumType.STRING`），`ddl-auto=validate`

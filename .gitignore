@@ -1,0 +1,51 @@
+# ===== 機密與環境設定（絕對不能進版控）=====
+.env
+.env.*
+!.env.example
+backend/src/main/resources/application-local.*
+*.pem
+*.key
+*.p12
+
+# ===== 執行期資料（含顧客個資，不能進版控）=====
+# 上傳的商品圖片（B07）
+uploads/
+# 資料庫備份（D05）
+backups/
+*.dump
+*.sql.gz
+
+# ===== Java / Maven =====
+target/
+*.class
+hs_err_pid*
+replay_pid*
+
+# ===== Node / Vite =====
+node_modules/
+dist/
+.vite/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ===== 日誌 =====
+*.log
+logs/
+
+# ===== IDE =====
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+*.swp
+
+# ===== 作業系統 =====
+.DS_Store
+Thumbs.db
+desktop.ini
