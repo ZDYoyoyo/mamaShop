@@ -41,3 +41,17 @@ cd backend && ./mvnw spring-boot:run
 後端測試需要資料庫在執行中：`cd backend && ./mvnw test`
 
 啟動時會依 `.env` 的 `ADMIN_EMAIL`／`ADMIN_PASSWORD` 建立預設管理員（已存在則略過）。`.env` 設定 `APP_PROFILE=dev` 時會自動載入測試商品。想把本機資料庫清空重建：`docker compose down -v`（`-v` 會刪除資料庫的 volume），再重新 `docker compose up -d db`。
+
+### 用 Docker 啟動整套服務
+
+不需要在本機裝 Java，只要 Docker：
+
+```bash
+cp .env.example .env          # 同上，修改密碼與 JWT_SECRET
+docker compose up --build     # 建置後端映像檔並啟動資料庫＋後端
+```
+
+- 後端：http://localhost:8080（只綁定本機）
+- 上傳的商品圖片存在 Docker volume `uploads-data`，重建容器不會消失
+- 改了程式碼要重新 `docker compose up --build`；開發時建議用上面的 `mvnw spring-boot:run`，比較快
+- 兩種方式都用 8080 port，不要同時開

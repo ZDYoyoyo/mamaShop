@@ -1,0 +1,10 @@
+# docker build 時「不要」送進建置環境的檔案。
+# 少送檔案建置比較快，也避免把不該進映像檔的東西（上傳的圖片、本機建置結果）包進去。
+target/
+uploads/
+.idea/
+.vscode/
+*.iml
+*.log
+.env
+.env.*

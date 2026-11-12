@@ -1,11 +1,17 @@
 # 本機開發用。正式環境的設定放在 deploy/（D03）。
-# 啟動資料庫：docker compose up -d db
+#
+# 只啟動資料庫（後端用 mvnw spring-boot:run 在本機跑，改程式比較方便）：
+#   docker compose up -d db
+# 啟動整套服務（資料庫＋後端，都在容器裡）：
+#   docker compose up --build
+#
+# 所有 ${...} 的值來自同目錄的 .env（docker compose 會自動讀取）。
+# ${VAR:?訊息}：沒設定就直接報錯；${VAR:-預設}：沒設定就用預設值。
 services:
   db:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      # 值來自同目錄的 .env（docker compose 會自動讀取）
       POSTGRES_DB: ${DB_NAME:?請先建立 .env，參考 .env.example}
       POSTGRES_USER: ${DB_USERNAME:?請先建立 .env，參考 .env.example}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?請先建立 .env，參考 .env.example}
@@ -22,5 +28,33 @@ services:
       timeout: 3s
       retries: 10
 
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        # 等資料庫的 healthcheck 通過才啟動後端，避免後端啟動時資料庫還沒準備好而失敗
+        condition: service_healthy
+    environment:
+      # 容器之間用「服務名稱」互相連線：後端連 db:5432，不是 localhost
+      # （在容器裡 localhost 指的是容器自己）
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?請在 .env 設定 JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-1d}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      APP_PROFILE: ${APP_PROFILE:-}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # 商品圖片：容器重建（例如改程式後重新 build）時不會消失
+      - uploads-data:/app/uploads
+
 volumes:
   db-data:
+  uploads-data:

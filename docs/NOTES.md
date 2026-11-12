@@ -217,3 +217,19 @@ PR #1–#9 已 merge，但你還沒看過。B 系列完成後一起研究。建�
 - ℹ️ Controller 參數測試只關掉 Security filter，直接設定 `SecurityContextHolder` 模擬登入者
 - 🔲 **CI（D06）**：整合測試需要 PostgreSQL；GitHub Actions 要加 `services: postgres`，或改用 Testcontainers
 - 🔲 **沒有測試覆蓋率報告**（JaCoCo）；需要的話 D06 時一起加
+
+## B12 Docker 化
+
+- ℹ️ `backend/Dockerfile`：多階段建置。第 1 階段 `eclipse-temurin:21-jdk-alpine` 用 `mvnw` 打包；第 2 階段 `eclipse-temurin:21-jre-alpine` 只放 jar
+- ℹ️ 先複製 `pom.xml` 下載依賴、再複製原始碼：只改程式碼時，依賴那一層直接用快取
+- ℹ️ 以非 root 使用者 `spring` 執行；映像檔裡沒有原始碼、Maven、javac
+- ℹ️ `-XX:MaxRAMPercentage=75`：JVM 依容器記憶體上限決定 heap
+- ℹ️ `docker-compose.yml` 加入 `backend`：等 `db` 的 healthcheck 通過才啟動；容器內用 `DB_HOST=db` 連資料庫；上傳目錄掛 volume `uploads-data`
+- ℹ️ 映像檔建置時**不跑測試**（測試需要資料庫），由 `mvnw test` 與 CI（D06）負責
+- ℹ️ **`.env.example` 沒有新增變數**：compose 直接從 `.env` 取值傳給後端，只有 `DB_HOST` 在 compose 裡固定為 `db`
+- ℹ️ `mvnw` 在 Windows checkout 時：`backend/.gitattributes` 已強制 LF 換行，Dockerfile 也會 `chmod +x`，不會因 CRLF 或權限在 Linux 容器裡執行失敗
+- ℹ️ 在 Claude 的雲端環境驗證時，因為網路代理會重新簽 TLS 憑證，另外用一份「多信任代理 CA」的 Dockerfile 建置（只在暫存目錄，沒有 commit）。在你的電腦上直接用 `docker compose up --build` 即可
+- 🔲 **映像檔約 400MB**（JRE + Spring Boot 依賴）。之後可以用 Spring Boot 的 layered jar 讓「只改程式碼」時推送更少的資料，D03 部署時再評估
+- 🔲 **容器時區是 UTC**：log 時間會比台灣慢 8 小時（資料庫存的是 `TIMESTAMPTZ`，訂單編號也用台灣日期，資料本身不受影響）
+- 🔲 **沒有後端的 healthcheck**：D07 加入 Actuator 後再補
+- 🔲 **正式環境的 compose 在 D03**：會加 Nginx、資料庫不對外開 port、`restart` 策略、log 輪替
