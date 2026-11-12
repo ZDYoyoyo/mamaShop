@@ -9,6 +9,8 @@ import com.mamashop.user.entity.Role;
 import com.mamashop.user.entity.User;
 import com.mamashop.user.repository.UserRepository;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -26,6 +28,7 @@ class OrderTestData {
 
     private User user;
     private Category category;
+    private final List<User> extraUsers = new ArrayList<>();
 
     OrderTestData(UserRepository userRepository, CategoryRepository categoryRepository,
                   ProductRepository productRepository, JdbcTemplate jdbc) {
@@ -37,12 +40,7 @@ class OrderTestData {
 
     void setUp() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
-        user = new User();
-        user.setEmail("order-test-" + suffix + "@example.com");
-        user.setPasswordHash("not-used");
-        user.setName("下單測試");
-        user.setRole(Role.USER);
-        user = userRepository.save(user);
+        user = createUser();
 
         category = new Category();
         category.setName("訂單測試分類-" + suffix);
@@ -71,14 +69,36 @@ class OrderTestData {
         return user;
     }
 
+    /** 另一位顧客（測試「看不到別人的訂單」用），cleanUp 時一起刪除 */
+    User otherUser() {
+        User other = createUser();
+        extraUsers.add(other);
+        return other;
+    }
+
+    private User createUser() {
+        User u = new User();
+        u.setEmail("order-test-" + UUID.randomUUID().toString().substring(0, 8) + "@example.com");
+        u.setPasswordHash("not-used");
+        u.setName("下單測試");
+        u.setRole(Role.USER);
+        return userRepository.save(u);
+    }
+
     /** 依外鍵順序刪除：狀態紀錄 → 明細 → 訂單 → 商品 → 分類 → 會員 */
     void cleanUp() {
-        Long userId = user.getId();
-        jdbc.update("DELETE FROM order_status_histories WHERE order_id IN (SELECT id FROM orders WHERE user_id = ?)", userId);
-        jdbc.update("DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE user_id = ?)", userId);
-        jdbc.update("DELETE FROM orders WHERE user_id = ?", userId);
+        List<User> users = new ArrayList<>(extraUsers);
+        users.add(user);
+        for (User u : users) {
+            Long userId = u.getId();
+            jdbc.update("DELETE FROM order_status_histories WHERE order_id IN (SELECT id FROM orders WHERE user_id = ?)", userId);
+            jdbc.update("DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE user_id = ?)", userId);
+            jdbc.update("DELETE FROM orders WHERE user_id = ?", userId);
+        }
         jdbc.update("DELETE FROM products WHERE category_id = ?", category.getId());
         jdbc.update("DELETE FROM categories WHERE id = ?", category.getId());
-        jdbc.update("DELETE FROM users WHERE id = ?", userId);
+        for (User u : users) {
+            jdbc.update("DELETE FROM users WHERE id = ?", u.getId());
+        }
     }
 }

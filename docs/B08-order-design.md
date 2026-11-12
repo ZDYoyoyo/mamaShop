@@ -1,7 +1,7 @@
 # B08 建立訂單：設計說明
 
 這份文件說明 `POST /api/orders` 的設計，重點是**併發**、**交易**、**回滾**。
-對應程式：`backend/src/main/java/com/mamashop/order/service/OrderService.java`
+對應程式：`backend/src/main/java/com/mamashop/order/service/OrderService.java`、`OrderStockService.java`（扣庫存、歸還庫存，B09 從 OrderService 搬出）
 
 ---
 
@@ -180,7 +180,7 @@ Controller → [代理：BEGIN] → createOrder() → [代理：COMMIT 或 ROLLB
 
 - **重複送出**：連點兩下「送出訂單」會建立兩筆訂單。目前靠前端按下後停用按鈕（F05），R02 會用 Redis 一次性 token 從後端擋
 - **訂單編號重複**：機率極低，真的發生時整筆回滾、回 500，顧客重送即可
-- **庫存回補**：取消訂單歸還庫存在 B09／B10
+- **庫存回補**：顧客取消在 B09 完成（`OrderStockService.restore`，同樣依商品 id 排序）；管理員取消在 B10
 
 ---
 

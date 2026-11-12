@@ -1,5 +1,7 @@
 package com.mamashop.order.entity;
 
+import com.mamashop.common.exception.BusinessException;
+import com.mamashop.common.exception.ErrorCode;
 import com.mamashop.shipping.entity.ShippingMethodCode;
 import com.mamashop.user.entity.User;
 import jakarta.persistence.CascadeType;
@@ -150,6 +152,31 @@ public class Order {
     public void addItem(OrderItem item) {
         items.add(item);
         item.setOrder(this);
+    }
+
+    /**
+     * 變更訂單狀態的唯一入口：檢查狀態機規則，並記錄對應的時間。
+     * 規則不允許時丟出 BusinessException（交易會 rollback）。
+     *
+     * @return 變更前的狀態（寫入狀態紀錄用）
+     */
+    public OrderStatus transitionTo(OrderStatus target, Instant now) {
+        if (!status.canTransitionTo(target)) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS,
+                    "訂單目前是「" + status.label() + "」，不能改為「" + target.label() + "」");
+        }
+        OrderStatus from = status;
+        status = target;
+        switch (target) {
+            case PROCESSING -> confirmedAt = now;
+            case SHIPPED -> shippedAt = now;
+            case DELIVERED -> deliveredAt = now;
+            case COMPLETED -> completedAt = now;
+            case CANCELLED -> cancelledAt = now;
+            case RETURNED -> returnedAt = now;
+            default -> { }
+        }
+        return from;
     }
 
     public Long getId() {
