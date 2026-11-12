@@ -160,6 +160,8 @@ class AccessControlTest {
                                 .map(method -> method.name() + " " + pattern)))
                 // 排除 Spring Boot 內建的 /error，以及其他測試類別裡的測試專用 Controller
                 .filter(key -> !key.endsWith(" /error") && !key.contains("__test"))
+                // 排除 API 文件（springdoc）：是否存在取決於 API_DOCS_ENABLED，由 ApiDocsTest 驗證
+                .filter(key -> !key.contains(" /v3/api-docs") && !key.contains(" /swagger-ui"))
                 .collect(Collectors.toCollection(TreeSet::new));
         Set<String> listed = endpoints().map(Endpoint::key).collect(Collectors.toCollection(TreeSet::new));
 

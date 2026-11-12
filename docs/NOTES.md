@@ -233,3 +233,14 @@ PR #1–#9 已 merge，但你還沒看過。B 系列完成後一起研究。建�
 - 🔲 **容器時區是 UTC**：log 時間會比台灣慢 8 小時（資料庫存的是 `TIMESTAMPTZ`，訂單編號也用台灣日期，資料本身不受影響）
 - 🔲 **沒有後端的 healthcheck**：D07 加入 Actuator 後再補
 - 🔲 **正式環境的 compose 在 D03**：會加 Nginx、資料庫不對外開 port、`restart` 策略、log 輪替
+
+## B13 API 文件
+
+- ℹ️ springdoc-openapi 3.2.0（對應 Spring Boot 4）：自動從 Controller 產生 OpenAPI 規格與 Swagger UI；參數型別、驗證規則（`@Size`、`@Min`…）自動出現在文件上
+- ℹ️ 每個 Controller 加 `@Tag`（中文分組）、每支 API 加 `@Operation(summary)`；需要登入的 Controller 加 `@SecurityRequirement`，Swagger UI 上會顯示鎖頭並自動帶 token
+- ℹ️ `@AuthenticationPrincipal` 的參數不會出現在文件上（測試有驗證）
+- ℹ️ **預設關閉**：`API_DOCS_ENABLED` 沒設定或為 false 時 `/swagger-ui.html`、`/v3/api-docs` 都是 404。本機 `.env` 設為 true
+- ℹ️ 權限總表（`AccessControlTest`）排除了 API 文件的路徑，因為它們是否存在取決於設定；改由 `ApiDocsTest` 分別測開啟／關閉
+- ℹ️ 新增 API 時記得加 `@Operation(summary = "...")`，否則 Swagger UI 只會顯示方法名稱
+- 🔲 **沒有為每個錯誤情況寫回應範例**（例如 409 的內容），只有成功回應的結構；需要的話可以加 `@ApiResponse`
+- 🔲 **如果想讓面試官線上試用 API**：可以在正式環境開啟，但建議另外加 Nginx 的 Basic Auth 保護，或只開展示站

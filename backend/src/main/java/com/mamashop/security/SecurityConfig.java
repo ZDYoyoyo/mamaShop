@@ -46,6 +46,8 @@ public class SecurityConfig {
                                 "/api/categories/**", "/api/products/**", "/api/shipping-methods/**").permitAll()
                         // 商品圖片（B07）
                         .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
+                        // API 文件（B13）。是否啟用由 API_DOCS_ENABLED 控制，正式環境關閉時這些路徑會是 404
+                        .requestMatchers(HttpMethod.GET, "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // 例外發生時 Spring Boot 會轉到 /error；不開放的話真正的錯誤會被蓋成 401
                         .requestMatchers("/error").permitAll()
                         // 後台

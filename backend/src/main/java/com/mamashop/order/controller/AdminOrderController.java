@@ -1,5 +1,6 @@
 package com.mamashop.order.controller;
 
+import com.mamashop.common.config.OpenApiConfig;
 import com.mamashop.common.response.ApiResponse;
 import com.mamashop.common.response.PageResponse;
 import com.mamashop.order.dto.AdminOrderActionRequest;
@@ -11,6 +12,9 @@ import com.mamashop.order.entity.OrderStatus;
 import com.mamashop.order.service.AdminOrderService;
 import com.mamashop.security.AuthUser;
 import com.mamashop.shipping.entity.ShippingMethodCode;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -30,6 +34,8 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>每個操作是一支獨立的 API（POST /confirm、/ship…），而不是一支「PATCH 任意 status」：
  * 每個動作需要的資料不同（出貨要物流單號、退回要決定是否補庫存），附帶的效果也不同（完成要標記已付款、取消要歸還庫存）。
  */
+@Tag(name = "後台：訂單", description = "限管理員。所有操作都要帶畫面上的 version，和伺服器不同會回 409")
+@SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
 @RestController
 @RequestMapping("/api/admin/orders")
 public class AdminOrderController {
@@ -41,6 +47,7 @@ public class AdminOrderController {
     }
 
     /** 訂單列表。例如待確認的訂單：GET /api/admin/orders?status=PENDING_CONFIRM */
+    @Operation(summary = "訂單列表（依狀態、運送方式篩選）")
     @GetMapping
     public ApiResponse<PageResponse<AdminOrderSummaryResponse>> list(
             @RequestParam(required = false) OrderStatus status,
@@ -51,12 +58,14 @@ public class AdminOrderController {
     }
 
     /** 訂單詳情：含下單會員、狀態紀錄、版本號 */
+    @Operation(summary = "訂單詳情（含下單會員、狀態紀錄、版本號）")
     @GetMapping("/{orderNo}")
     public ApiResponse<AdminOrderDetailResponse> get(@PathVariable @Size(max = 32) String orderNo) {
         return ApiResponse.ok(adminOrderService.get(orderNo));
     }
 
     /** 確認訂單：{"version": 0, "note": "已電話確認"} */
+    @Operation(summary = "確認訂單（待確認 → 備貨中）")
     @PostMapping("/{orderNo}/confirm")
     public ApiResponse<AdminOrderDetailResponse> confirm(@AuthenticationPrincipal AuthUser admin,
                                                          @PathVariable @Size(max = 32) String orderNo,
@@ -65,6 +74,7 @@ public class AdminOrderController {
     }
 
     /** 出貨：{"version": 1, "trackingNo": "123456789"} */
+    @Operation(summary = "出貨（備貨中 → 已出貨，必填物流單號）")
     @PostMapping("/{orderNo}/ship")
     public ApiResponse<AdminOrderDetailResponse> ship(@AuthenticationPrincipal AuthUser admin,
                                                       @PathVariable @Size(max = 32) String orderNo,
@@ -74,6 +84,7 @@ public class AdminOrderController {
     }
 
     /** 已送達／已到店 */
+    @Operation(summary = "已送達（已出貨 → 已送達）")
     @PostMapping("/{orderNo}/deliver")
     public ApiResponse<AdminOrderDetailResponse> deliver(@AuthenticationPrincipal AuthUser admin,
                                                          @PathVariable @Size(max = 32) String orderNo,
@@ -82,6 +93,7 @@ public class AdminOrderController {
     }
 
     /** 完成（同時標記已收款） */
+    @Operation(summary = "完成（已送達 → 已完成，標記已付款）")
     @PostMapping("/{orderNo}/complete")
     public ApiResponse<AdminOrderDetailResponse> complete(@AuthenticationPrincipal AuthUser admin,
                                                           @PathVariable @Size(max = 32) String orderNo,
@@ -90,6 +102,7 @@ public class AdminOrderController {
     }
 
     /** 取消（出貨前），歸還庫存 */
+    @Operation(summary = "取消（出貨前，歸還庫存）")
     @PostMapping("/{orderNo}/cancel")
     public ApiResponse<AdminOrderDetailResponse> cancel(@AuthenticationPrincipal AuthUser admin,
                                                         @PathVariable @Size(max = 32) String orderNo,
@@ -98,6 +111,7 @@ public class AdminOrderController {
     }
 
     /** 退回：{"version": 3, "restock": true, "note": "超商未取件"} */
+    @Operation(summary = "退回（已出貨／已送達 → 已退回，可選是否歸還庫存）")
     @PostMapping("/{orderNo}/return")
     public ApiResponse<AdminOrderDetailResponse> markReturned(@AuthenticationPrincipal AuthUser admin,
                                                               @PathVariable @Size(max = 32) String orderNo,

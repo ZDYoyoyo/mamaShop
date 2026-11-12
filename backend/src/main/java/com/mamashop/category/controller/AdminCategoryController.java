@@ -3,7 +3,11 @@ package com.mamashop.category.controller;
 import com.mamashop.category.dto.AdminCategoryResponse;
 import com.mamashop.category.dto.CategoryRequest;
 import com.mamashop.category.service.CategoryService;
+import com.mamashop.common.config.OpenApiConfig;
 import com.mamashop.common.response.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import java.util.List;
@@ -19,6 +23,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 後台分類管理。/api/admin/** 在 SecurityConfig 限定 ADMIN。 */
+@Tag(name = "後台：分類", description = "限管理員")
+@SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
 @RestController
 @RequestMapping("/api/admin/categories")
 public class AdminCategoryController {
@@ -29,23 +35,27 @@ public class AdminCategoryController {
         this.categoryService = categoryService;
     }
 
+    @Operation(summary = "分類列表")
     @GetMapping
     public ApiResponse<List<AdminCategoryResponse>> list() {
         return ApiResponse.ok(categoryService.listForAdmin());
     }
 
+    @Operation(summary = "新增分類")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<AdminCategoryResponse> create(@Valid @RequestBody CategoryRequest request) {
         return ApiResponse.ok(categoryService.create(request));
     }
 
+    @Operation(summary = "修改分類")
     @PutMapping("/{id}")
     public ApiResponse<AdminCategoryResponse> update(@PathVariable @Positive Long id,
                                                      @Valid @RequestBody CategoryRequest request) {
         return ApiResponse.ok(categoryService.update(id, request));
     }
 
+    @Operation(summary = "刪除分類（底下沒有商品才能刪）")
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable @Positive Long id) {
         categoryService.delete(id);
