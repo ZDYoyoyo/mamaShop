@@ -164,7 +164,7 @@ async function submit() {
         <h2>運送方式</h2>
         <el-form-item prop="shippingMethod">
           <el-radio-group v-model="form.shippingMethod" class="methods">
-            <el-radio v-for="method in shippingMethods" :key="method.code" :value="method.code" border>
+            <el-radio v-for="method in shippingMethods" :key="method.code" :value="method.code" border size="large">
               {{ method.name }}（運費 {{ formatPrice(method.fee) }}）
             </el-radio>
           </el-radio-group>
@@ -259,6 +259,8 @@ h2 {
 }
 
 .edit-link {
+  display: inline-block;
+  padding: 8px 0;
   font-size: 0.9rem;
 }
 

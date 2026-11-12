@@ -51,3 +51,21 @@ h1,
 h2 {
   line-height: 1.3;
 }
+
+/*
+ * 手機版面（F07）
+ *
+ * iPhone 的 Safari：輸入框文字小於 16px 時，點進去會自動放大整個頁面，打完字還要自己縮回來。
+ * Element Plus 輸入框預設 14px，所以在觸控裝置（手機、平板）上改成 16px。
+ * 用 pointer: coarse（主要輸入是手指）而不是螢幕寬度判斷：iPad 寬度大，但一樣會放大。
+ * 不用 viewport 的 maximum-scale=1 關掉縮放：那會讓看不清楚的人也不能用兩指放大。
+ * html:root 提高優先級，蓋過 Element Plus 小尺寸元件（.el-input--small .el-input__inner）的設定。
+ */
+@media (pointer: coarse) {
+  html:root .el-input__inner,
+  html:root .el-textarea__inner,
+  html:root .el-select__wrapper,
+  html:root .el-select__input {
+    font-size: 16px;
+  }
+}

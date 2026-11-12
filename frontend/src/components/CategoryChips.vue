@@ -13,7 +13,6 @@ const selected = defineModel({ type: Number, default: null })
   <div class="chips" role="tablist" aria-label="商品分類">
     <el-button
       round
-      size="small"
       :type="selected === null ? 'primary' : 'default'"
       role="tab"
       :aria-selected="selected === null"
@@ -25,7 +24,6 @@ const selected = defineModel({ type: Number, default: null })
       v-for="category in categories"
       :key="category.id"
       round
-      size="small"
       :type="selected === category.id ? 'primary' : 'default'"
       role="tab"
       :aria-selected="selected === category.id"
