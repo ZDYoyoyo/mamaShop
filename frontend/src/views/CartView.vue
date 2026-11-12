@@ -82,8 +82,11 @@ function lineTotal(item) {
       </div>
       <p class="hint">運費於結帳時依運送方式計算</p>
       <p v-if="cart.hasProblems" class="hint warning">已售完或下架的商品不會結帳，可以先刪除</p>
-      <!-- 結帳頁在 F05 完成後啟用 -->
-      <el-button type="primary" size="large" class="checkout" disabled>前往結帳</el-button>
+      <!-- 結帳頁需要登入：沒登入會先被路由守衛帶到登入頁，登入後再回到結帳頁 -->
+      <RouterLink v-if="cart.purchasableItems.length > 0" :to="{ name: 'checkout' }" custom v-slot="{ navigate }">
+        <el-button type="primary" size="large" class="checkout" @click="navigate">前往結帳</el-button>
+      </RouterLink>
+      <el-button v-else type="primary" size="large" class="checkout" disabled>前往結帳</el-button>
     </section>
   </template>
 </template>

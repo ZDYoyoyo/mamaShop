@@ -65,9 +65,15 @@ export const useCartStore = defineStore('cart', () => {
     items.value = items.value.filter((item) => item.productId !== productId)
   }
 
-  /** 結帳成功後清空（F05） */
+  /** 清空購物車 */
   function clear() {
     items.value = []
+  }
+
+  /** 結帳成功後移除已下單的品項（售完、下架的品項沒有結帳，留在購物車讓顧客自己處理） */
+  function removeItems(productIds) {
+    const ordered = new Set(productIds)
+    items.value = items.value.filter((item) => !ordered.has(item.productId))
   }
 
   /**
@@ -117,6 +123,7 @@ export const useCartStore = defineStore('cart', () => {
     updateQuantity,
     removeItem,
     clear,
+    removeItems,
     refresh,
   }
 })

@@ -26,3 +26,8 @@ export function searchProducts({ categoryId, keyword, page = 1, size = 12 } = {}
 export function getProduct(id) {
   return http.get(`/products/${id}`)
 }
+
+/** 可用的運送方式與運費（結帳頁用）：[{ code, name, fee }] */
+export function getShippingMethods() {
+  return http.get('/shipping-methods')
+}
