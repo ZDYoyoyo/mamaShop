@@ -57,4 +57,25 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
              WHERE p.id = :id AND p.stock + :delta >= 0
             """)
     int adjustStock(@Param("id") Long id, @Param("delta") int delta, @Param("now") Instant now);
+
+    /**
+     * 下單扣庫存（B08）：條件更新，庫存夠而且商品上架中才扣。
+     *
+     * <p>為什麼不會超賣：PostgreSQL 執行 UPDATE 時會鎖住這一列（row lock）。
+     * 兩筆訂單同時扣同一個商品，第二筆會等第一筆的交易結束，然後用「最新的庫存」重新判斷 WHERE 條件。
+     * 所以「檢查庫存夠不夠」和「扣掉」是同一個不可分割的動作，中間不會被插隊。
+     *
+     * <p>clearAutomatically = false：下單流程是「先扣庫存、再讀商品」，扣之前沒有載入商品，
+     * 一級快取裡沒有舊資料，不需要清除（清除會讓已載入的其他 Entity 也變成 detached）。
+     *
+     * @return 1 扣成功；0 代表庫存不足、商品下架或不存在
+     */
+    @Modifying
+    @Query("""
+            UPDATE Product p
+               SET p.stock = p.stock - :quantity, p.updatedAt = :now
+             WHERE p.id = :id AND p.status = :status AND p.stock >= :quantity
+            """)
+    int decreaseStock(@Param("id") Long id, @Param("quantity") int quantity,
+                      @Param("status") ProductStatus status, @Param("now") Instant now);
 }

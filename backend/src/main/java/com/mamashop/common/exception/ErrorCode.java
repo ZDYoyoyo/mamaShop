@@ -35,7 +35,13 @@ public enum ErrorCode {
     STOCK_ADJUSTMENT_INVALID(HttpStatus.CONFLICT, "調整後庫存不可小於 0"),
 
     // ===== 運送方式 =====
-    LAST_SHIPPING_METHOD(HttpStatus.CONFLICT, "至少要保留一種啟用中的運送方式");
+    LAST_SHIPPING_METHOD(HttpStatus.CONFLICT, "至少要保留一種啟用中的運送方式"),
+
+    // ===== 訂單 =====
+    PRODUCT_UNAVAILABLE(HttpStatus.CONFLICT, "商品已下架或不存在"),
+    INSUFFICIENT_STOCK(HttpStatus.CONFLICT, "商品庫存不足"),
+    SHIPPING_METHOD_UNAVAILABLE(HttpStatus.CONFLICT, "此運送方式目前無法使用"),
+    ORDER_AMOUNT_TOO_LARGE(HttpStatus.BAD_REQUEST, "訂單金額超過上限");
 
     private final HttpStatus status;
     private final String defaultMessage;
