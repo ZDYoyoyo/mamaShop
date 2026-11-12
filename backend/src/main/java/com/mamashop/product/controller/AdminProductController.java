@@ -1,5 +1,6 @@
 package com.mamashop.product.controller;
 
+import com.mamashop.common.config.OpenApiConfig;
 import com.mamashop.common.response.ApiResponse;
 import com.mamashop.common.response.PageResponse;
 import com.mamashop.product.dto.AdminProductResponse;
@@ -9,6 +10,9 @@ import com.mamashop.product.dto.ProductUpdateRequest;
 import com.mamashop.product.dto.StockAdjustRequest;
 import com.mamashop.product.entity.ProductStatus;
 import com.mamashop.product.service.AdminProductService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -30,6 +34,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 /** 後台商品管理。商品不提供刪除：舊訂單明細會參照商品，不再販售就下架。 */
+@Tag(name = "後台：商品", description = "限管理員")
+@SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
 @RestController
 @RequestMapping("/api/admin/products")
 public class AdminProductController {
@@ -41,6 +47,7 @@ public class AdminProductController {
     }
 
     /** 商品列表（含下架）。例如：GET /api/admin/products?status=OFF_SALE&page=1 */
+    @Operation(summary = "商品列表（含下架）")
     @GetMapping
     public ApiResponse<PageResponse<AdminProductResponse>> list(
             @RequestParam(required = false) @Positive Long categoryId,
@@ -51,11 +58,13 @@ public class AdminProductController {
         return ApiResponse.ok(adminProductService.search(categoryId, keyword, status, page, size));
     }
 
+    @Operation(summary = "商品詳情")
     @GetMapping("/{id}")
     public ApiResponse<AdminProductResponse> get(@PathVariable @Positive Long id) {
         return ApiResponse.ok(adminProductService.get(id));
     }
 
+    @Operation(summary = "新增商品（預設下架）")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<AdminProductResponse> create(@Valid @RequestBody ProductCreateRequest request) {
@@ -63,6 +72,7 @@ public class AdminProductController {
     }
 
     /** 修改基本資料（分類、名稱、描述、價格） */
+    @Operation(summary = "修改商品基本資料（不含庫存與狀態）")
     @PutMapping("/{id}")
     public ApiResponse<AdminProductResponse> update(@PathVariable @Positive Long id,
                                                     @Valid @RequestBody ProductUpdateRequest request) {
@@ -70,6 +80,7 @@ public class AdminProductController {
     }
 
     /** 上架／下架：{"status": "ON_SALE"} */
+    @Operation(summary = "上架／下架")
     @PatchMapping("/{id}/status")
     public ApiResponse<AdminProductResponse> changeStatus(@PathVariable @Positive Long id,
                                                           @Valid @RequestBody ProductStatusRequest request) {
@@ -77,6 +88,7 @@ public class AdminProductController {
     }
 
     /** 調整庫存：{"delta": 5} 進貨 5 件、{"delta": -2} 減少 2 件 */
+    @Operation(summary = "調整庫存（增減量）")
     @PatchMapping("/{id}/stock")
     public ApiResponse<AdminProductResponse> adjustStock(@PathVariable @Positive Long id,
                                                          @Valid @RequestBody StockAdjustRequest request) {
@@ -84,6 +96,7 @@ public class AdminProductController {
     }
 
     /** 上傳／更換商品圖片（multipart/form-data，欄位名稱 file） */
+    @Operation(summary = "上傳／更換商品圖片（JPG、PNG、WebP，10MB 以內）")
     @PostMapping(value = "/{id}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<AdminProductResponse> uploadImage(@PathVariable @Positive Long id,
                                                          @RequestPart("file") MultipartFile file) {

@@ -58,3 +58,18 @@ app:
     dir: ${UPLOAD_DIR:./uploads}
     # 圖片大小上限（程式內再檢查一次）
     max-image-size: 10MB
+
+# ===== API 文件（springdoc-openapi，B13）=====
+# 預設關閉：API 文件會列出所有後台 API，正式環境不需要公開。本機在 .env 設定 API_DOCS_ENABLED=true
+#   Swagger UI：http://localhost:8080/swagger-ui.html
+#   OpenAPI JSON：http://localhost:8080/v3/api-docs
+springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:false}
+  swagger-ui:
+    enabled: ${API_DOCS_ENABLED:false}
+    # 依路徑與 HTTP 方法排序，畫面比較好找
+    operations-sorter: method
+    tags-sorter: alpha
+    # 重新整理頁面後保留輸入的 token
+    persist-authorization: true

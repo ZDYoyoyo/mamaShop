@@ -55,3 +55,13 @@ docker compose up --build     # 建置後端映像檔並啟動資料庫＋後端
 - 上傳的商品圖片存在 Docker volume `uploads-data`，重建容器不會消失
 - 改了程式碼要重新 `docker compose up --build`；開發時建議用上面的 `mvnw spring-boot:run`，比較快
 - 兩種方式都用 8080 port，不要同時開
+
+### API 文件（Swagger UI）
+
+`.env` 設定 `API_DOCS_ENABLED=true` 後啟動後端，打開 http://localhost:8080/swagger-ui.html
+
+1. 在「會員：註冊與登入」呼叫登入 API，複製回傳的 `accessToken`
+2. 按右上角 **Authorize**，貼上 token（不用加 `Bearer`）
+3. 標有鎖頭的 API 就會自動帶上 token，可以直接按 Try it out 測試
+
+正式環境不要開啟（API 文件會列出所有後台 API）。

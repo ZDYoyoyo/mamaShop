@@ -134,7 +134,7 @@ mamaShop/
 - [x] **B10 後台訂單管理**：訂單列表（狀態、運送方式篩選、分頁）、確認訂單、出貨（填物流單號）、送達、完成（同時標記已收款）、取消、退回；每次狀態變更寫入 `order_status_histories`（記錄操作的管理員），用樂觀鎖處理多人同時操作
 - [x] **B11 測試**：`OrderService` 單元測試、Controller 權限與參數測試、~~多執行緒搶購併發測試（庫存 10、搶 50 次，驗證成功 10 筆）~~（已在 B08 完成）
 - [x] **B12 Docker 化**：多階段 `Dockerfile`、compose 加入後端、`.env.example`
-- [ ] **B13 API 文件**：springdoc-openapi，Swagger UI 可帶 JWT 測試
+- [x] **B13 API 文件**：springdoc-openapi，Swagger UI 可帶 JWT 測試
 - [ ] **B14 管理員帳號管理**：ADMIN 可以新增其他 ADMIN 帳號、停用帳號（不刪除，保留操作紀錄）、重設密碼；不能停用自己
 
 ## 第 2 階段：前台
