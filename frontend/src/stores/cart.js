@@ -85,6 +85,7 @@ export const useCartStore = defineStore('cart', () => {
   async function refresh() {
     const results = await Promise.allSettled(items.value.map((item) => getProduct(item.productId)))
     const notices = []
+    let unreachable = false
     results.forEach((result, index) => {
       const item = items.value[index]
       if (result.status === 'rejected') {
@@ -92,6 +93,8 @@ export const useCartStore = defineStore('cart', () => {
         if (result.reason?.status === 404) {
           if (item.status !== 'unavailable') notices.push(`「${item.name}」已下架`)
           item.status = 'unavailable'
+        } else {
+          unreachable = true
         }
         return
       }
@@ -107,6 +110,8 @@ export const useCartStore = defineStore('cart', () => {
         notices.push(`「${product.name}」庫存不足，數量已調整為 ${product.stock} 件`)
       }
     })
+    // 網路問題查不到：告訴顧客畫面上的價格、庫存可能不是最新的（下單時後端會再檢查）
+    if (unreachable) notices.push('目前無法確認最新的價格與庫存，送出訂單時會再確認')
     return notices
   }
 

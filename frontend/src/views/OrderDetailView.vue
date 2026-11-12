@@ -7,6 +7,7 @@ import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
 import { cancelOrder, getOrder } from '@/api/orders'
+import LoadError from '@/components/LoadError.vue'
 import OrderProgress from '@/components/OrderProgress.vue'
 import OrderStatusTag from '@/components/OrderStatusTag.vue'
 import { formatDateTime, formatPrice } from '@/utils/format'
@@ -64,7 +65,7 @@ async function cancel() {
     </template>
   </el-result>
 
-  <el-alert v-else-if="errorMessage" :title="errorMessage" type="error" :closable="false" show-icon />
+  <LoadError v-else-if="errorMessage" :message="errorMessage" @retry="load" />
 
   <template v-else>
     <RouterLink :to="{ name: 'orders' }" class="back">← 我的訂單</RouterLink>

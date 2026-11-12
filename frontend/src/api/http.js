@@ -1,4 +1,6 @@
 import axios from 'axios'
+import { ElMessage } from 'element-plus'
+import 'element-plus/es/components/message/style/css'
 import router from '@/router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -44,9 +46,13 @@ http.interceptors.response.use(
  * 清掉登入狀態，帶著目前的網址導向登入頁，登入後可以回到原本的頁面。
  */
 function handleUnauthorized() {
-  useAuthStore().logout()
+  const auth = useAuthStore()
+  const wasLoggedIn = auth.isLoggedIn
+  auth.logout()
   const current = router.currentRoute.value
   if (current.name !== 'login') {
+    // 原本是登入狀態才提示：讓顧客知道為什麼突然跳到登入頁
+    if (wasLoggedIn) ElMessage.warning('登入已過期，請重新登入')
     router.push({ name: 'login', query: { redirect: current.fullPath } })
   }
 }
@@ -67,13 +73,22 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * 回應不是後端的 JSON 格式時（例如 Nginx 的錯誤頁）的訊息。
+ * 502／503／504：後端沒開或正在重新啟動（部署新版本時），通常稍等一下就好。
+ */
+function fallbackMessage(status) {
+  if (status === 502 || status === 503 || status === 504) return '伺服器暫時無法使用，請稍後再試'
+  return '系統發生錯誤，請稍後再試'
+}
+
 function toApiError(error) {
   if (error.response) {
     const body = error.response.data?.error
     return new ApiError({
       status: error.response.status,
       code: body?.code ?? 'UNKNOWN',
-      message: body?.message ?? '系統發生錯誤，請稍後再試',
+      message: body?.message ?? fallbackMessage(error.response.status),
       fieldErrors: body?.fieldErrors ?? [],
     })
   }

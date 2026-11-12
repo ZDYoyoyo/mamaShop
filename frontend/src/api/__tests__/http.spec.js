@@ -7,6 +7,8 @@ const routerMock = vi.hoisted(() => ({
   push: vi.fn(),
 }))
 vi.mock('@/router', () => ({ default: routerMock }))
+const messageMock = vi.hoisted(() => ({ warning: vi.fn() }))
+vi.mock('element-plus', () => ({ ElMessage: messageMock }))
 
 import http, { ApiError } from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
@@ -36,6 +38,7 @@ describe('http（axios 攔截器）', () => {
     localStorage.clear()
     setActivePinia(createPinia())
     routerMock.push.mockClear()
+    messageMock.warning.mockClear()
   })
 
   it('成功時直接回傳 data', async () => {
@@ -90,6 +93,16 @@ describe('http（axios 攔截器）', () => {
     expect(auth.isLoggedIn).toBe(false)
     expect(localStorage.getItem('mamashop.token')).toBeNull()
     expect(routerMock.push).toHaveBeenCalledWith({ name: 'login', query: { redirect: '/orders?page=2' } })
+    expect(messageMock.warning).toHaveBeenCalledWith('登入已過期，請重新登入')
+  })
+
+  it('原本就沒登入的 401：導向登入頁，但不說「登入已過期」', async () => {
+    respondWith(401, { success: false, error: { code: 'UNAUTHORIZED', message: '請先登入' } })
+
+    await http.get('/orders').catch(() => {})
+
+    expect(routerMock.push).toHaveBeenCalled()
+    expect(messageMock.warning).not.toHaveBeenCalled()
   })
 
   it('skipAuthRedirect：登入失敗的 401 不要導頁（F04 的登入 API 會用到）', async () => {
@@ -99,6 +112,23 @@ describe('http（axios 攔截器）', () => {
 
     expect(error.message).toBe('Email 或密碼錯誤')
     expect(routerMock.push).not.toHaveBeenCalled()
+  })
+
+  it('後端沒開（Nginx／proxy 回 502，不是 JSON）：提示稍後再試', async () => {
+    respondWith(502, '<html>Bad Gateway</html>')
+
+    const error = await http.get('/products').catch((e) => e)
+
+    expect(error.status).toBe(502)
+    expect(error.message).toBe('伺服器暫時無法使用，請稍後再試')
+  })
+
+  it('其他沒有錯誤內容的回應：一般錯誤訊息', async () => {
+    respondWith(500, '')
+
+    const error = await http.get('/products').catch((e) => e)
+
+    expect(error.message).toBe('系統發生錯誤，請稍後再試')
   })
 
   it('連不上伺服器時給友善的訊息', async () => {
