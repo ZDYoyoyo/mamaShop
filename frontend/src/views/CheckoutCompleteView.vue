@@ -5,6 +5,7 @@
  */
 import { onMounted, ref } from 'vue'
 import { getOrder } from '@/api/orders'
+import LoadError from '@/components/LoadError.vue'
 import { formatPrice } from '@/utils/format'
 import { cvsBrandLabel, PAYMENT_METHOD_LABELS } from '@/utils/labels'
 
@@ -15,21 +16,29 @@ const props = defineProps({
 const order = ref(null)
 const loading = ref(true)
 const errorMessage = ref('')
+const notFound = ref(false)
 
-onMounted(async () => {
+async function load() {
+  loading.value = true
+  errorMessage.value = ''
+  notFound.value = false
   try {
     order.value = await getOrder(props.orderNo)
   } catch (e) {
-    errorMessage.value = e.status === 404 ? '找不到這筆訂單' : e.message
+    if (e.status === 404) notFound.value = true
+    else errorMessage.value = e.message
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(load)
 </script>
 
 <template>
   <el-skeleton v-if="loading" animated :rows="5" />
-  <el-result v-else-if="errorMessage" icon="warning" :title="errorMessage" />
+  <el-result v-else-if="notFound" icon="warning" title="找不到這筆訂單" />
+  <LoadError v-else-if="errorMessage" :message="errorMessage" @retry="load" />
 
   <template v-else>
     <el-result icon="success" title="訂單已送出" :sub-title="`訂單編號 ${order.orderNo}`">

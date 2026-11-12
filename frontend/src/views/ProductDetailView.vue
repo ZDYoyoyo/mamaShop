@@ -6,6 +6,7 @@ import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
 import { getProduct } from '@/api/catalog'
+import LoadError from '@/components/LoadError.vue'
 import ProductImage from '@/components/ProductImage.vue'
 import { MAX_QUANTITY_PER_PRODUCT, useCartStore } from '@/stores/cart'
 import { formatPrice, stockLabel } from '@/utils/format'
@@ -38,25 +39,23 @@ function addToCart() {
 }
 
 // 從一個商品直接連到另一個商品時（路由一樣、只有 id 變），元件不會重建，所以要監聽 id
-watch(
-  () => props.id,
-  async (id) => {
-    loading.value = true
-    notFound.value = false
-    errorMessage.value = ''
-    quantity.value = 1
-    try {
-      product.value = await getProduct(id)
-      document.title = `${product.value.name} | mamaShop`
-    } catch (e) {
-      if (e.status === 404) notFound.value = true
-      else errorMessage.value = e.message
-    } finally {
-      loading.value = false
-    }
-  },
-  { immediate: true },
-)
+async function load() {
+  loading.value = true
+  notFound.value = false
+  errorMessage.value = ''
+  quantity.value = 1
+  try {
+    product.value = await getProduct(props.id)
+    document.title = `${product.value.name} | mamaShop`
+  } catch (e) {
+    if (e.status === 404) notFound.value = true
+    else errorMessage.value = e.message
+  } finally {
+    loading.value = false
+  }
+}
+
+watch(() => props.id, load, { immediate: true })
 </script>
 
 <template>
@@ -70,7 +69,7 @@ watch(
     </template>
   </el-result>
 
-  <el-alert v-else-if="errorMessage" :title="errorMessage" type="error" :closable="false" show-icon />
+  <LoadError v-else-if="errorMessage" :message="errorMessage" @retry="load" />
 
   <article v-else class="detail">
     <ProductImage :src="product.imageUrl" :alt="product.name" class="image" />

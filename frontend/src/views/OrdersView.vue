@@ -3,6 +3,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { listMyOrders } from '@/api/orders'
+import LoadError from '@/components/LoadError.vue'
 import OrderStatusTag from '@/components/OrderStatusTag.vue'
 import { formatDateTime, formatPrice } from '@/utils/format'
 import { SHIPPING_METHOD_LABELS } from '@/utils/labels'
@@ -48,7 +49,7 @@ function goToPage(pageNo) {
   <h1>我的訂單</h1>
 
   <el-skeleton v-if="loading" animated :rows="6" />
-  <el-alert v-else-if="errorMessage" :title="errorMessage" type="error" :closable="false" show-icon />
+  <LoadError v-else-if="errorMessage" :message="errorMessage" @retry="load(page)" />
   <el-empty v-else-if="result.items.length === 0" description="還沒有訂單">
     <RouterLink :to="{ name: 'products' }"><el-button type="primary">去逛逛</el-button></RouterLink>
   </el-empty>

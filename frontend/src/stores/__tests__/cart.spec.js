@@ -132,9 +132,11 @@ describe('cart store', () => {
       cart.addItem(tote, 1)
       vi.mocked(getProduct).mockRejectedValue(new ApiError({ status: 0, code: 'NETWORK_ERROR', message: '無法連線' }))
 
-      await cart.refresh()
+      const notices = await cart.refresh()
 
       expect(cart.items[0].status).toBe('ok')
+      // 但要讓顧客知道畫面上的價格、庫存可能不是最新的
+      expect(notices).toEqual(['目前無法確認最新的價格與庫存，送出訂單時會再確認'])
     })
   })
 })

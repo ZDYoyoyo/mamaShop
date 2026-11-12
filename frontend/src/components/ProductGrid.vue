@@ -24,7 +24,10 @@ defineProps({
       </template>
     </el-skeleton>
   </div>
-  <el-empty v-else-if="products.length === 0" :description="emptyText" />
+  <el-empty v-else-if="products.length === 0" :description="emptyText">
+    <!-- 頁面可以放按鈕（例如「看全部商品」），讓顧客知道下一步 -->
+    <slot name="empty" />
+  </el-empty>
   <div v-else class="grid">
     <ProductCard v-for="product in products" :key="product.id" :product="product" />
   </div>

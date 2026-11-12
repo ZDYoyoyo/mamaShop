@@ -10,6 +10,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getShippingMethods } from '@/api/catalog'
 import { createOrder } from '@/api/orders'
+import LoadError from '@/components/LoadError.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
 import { formatPrice } from '@/utils/format'
@@ -62,11 +63,9 @@ const rules = {
   cvsStoreName: [{ required: true, whitespace: true, message: '請填寫門市名稱', trigger: 'blur' }],
 }
 
-onMounted(async () => {
-  if (cart.items.length === 0) {
-    router.replace({ name: 'cart' })
-    return
-  }
+async function load() {
+  loading.value = true
+  loadError.value = ''
   try {
     // 同時更新購物車（價格、庫存可能變了）與取得運送方式
     const [cartNotices, methods] = await Promise.all([cart.refresh(), getShippingMethods()])
@@ -78,6 +77,14 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+}
+
+onMounted(() => {
+  if (cart.items.length === 0) {
+    router.replace({ name: 'cart' })
+    return
+  }
+  load()
 })
 
 const submitting = ref(false)
@@ -129,7 +136,7 @@ async function submit() {
   <h1>結帳</h1>
 
   <el-skeleton v-if="loading" animated :rows="6" />
-  <el-alert v-else-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
+  <LoadError v-else-if="loadError" :message="loadError" @retry="load" />
 
   <template v-else>
     <el-alert v-if="notices.length" type="warning" :closable="false" show-icon class="block">

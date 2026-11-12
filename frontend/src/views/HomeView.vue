@@ -7,6 +7,7 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getCategories, searchProducts } from '@/api/catalog'
 import CategoryChips from '@/components/CategoryChips.vue'
+import LoadError from '@/components/LoadError.vue'
 import ProductGrid from '@/components/ProductGrid.vue'
 import SearchBox from '@/components/SearchBox.vue'
 
@@ -17,7 +18,9 @@ const latest = ref([])
 const loading = ref(true)
 const errorMessage = ref('')
 
-onMounted(async () => {
+async function load() {
+  loading.value = true
+  errorMessage.value = ''
   try {
     // 兩個請求同時送出，不用等一個完成才送下一個
     const [categoryList, page] = await Promise.all([getCategories(), searchProducts({ size: 8 })])
@@ -28,7 +31,9 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(load)
 
 function search(keyword) {
   router.push({ name: 'products', query: keyword ? { keyword } : {} })
@@ -46,7 +51,7 @@ function selectCategory(categoryId) {
     <SearchBox class="hero-search" @search="search" />
   </section>
 
-  <el-alert v-if="errorMessage" :title="errorMessage" type="error" :closable="false" show-icon />
+  <LoadError v-if="errorMessage" :message="errorMessage" @retry="load" />
 
   <template v-else>
     <section class="block">

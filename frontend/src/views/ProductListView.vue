@@ -12,6 +12,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getCategories, searchProducts } from '@/api/catalog'
 import CategoryChips from '@/components/CategoryChips.vue'
 import ProductGrid from '@/components/ProductGrid.vue'
+import LoadError from '@/components/LoadError.vue'
 import SearchBox from '@/components/SearchBox.vue'
 
 const PAGE_SIZE = 12
@@ -111,14 +112,19 @@ function positiveInt(value) {
     <span v-if="!loading && !errorMessage" class="count">共 {{ result.totalElements }} 件</span>
   </div>
 
-  <el-alert v-if="errorMessage" :title="errorMessage" type="error" :closable="false" show-icon />
+  <LoadError v-if="errorMessage" :message="errorMessage" @retry="load(filters)" />
   <template v-else>
     <ProductGrid
       :products="result.items"
       :loading="loading"
       :skeleton-count="PAGE_SIZE"
       :empty-text="filters.keyword ? '找不到符合的商品，換個關鍵字試試' : '這個分類還沒有商品'"
-    />
+    >
+      <!-- 有搜尋或分類條件時，給一個回到全部商品的出口 -->
+      <template v-if="filters.keyword || filters.categoryId" #empty>
+        <el-button type="primary" @click="router.push({ name: 'products' })">看全部商品</el-button>
+      </template>
+    </ProductGrid>
     <el-pagination
       v-if="!loading"
       class="pagination"

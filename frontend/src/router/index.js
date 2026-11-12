@@ -1,5 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '@/views/HomeView.vue'
+import { ElMessage } from 'element-plus'
+import 'element-plus/es/components/message/style/css'
+import { handleChunkLoadError } from './chunkError'
 import { authGuard } from './guards'
 
 /**
@@ -97,5 +100,23 @@ router.beforeEach(authGuard)
 router.afterEach(() => {
   document.title = 'mamaShop'
 })
+
+// 換頁時頁面程式下載失敗（網路不穩、剛部署新版本）：重新整理或顯示錯誤（chunkError.js）
+router.onError((error, to) => {
+  handleChunkLoadError(error, to, {
+    storage: sessionStorageOrNull(),
+    reload: (url) => window.location.assign(url),
+    notify: (message) => ElMessage.error(message),
+  })
+})
+
+// 瀏覽器封鎖儲存空間時，光是讀 window.sessionStorage 就會丟出例外
+function sessionStorageOrNull() {
+  try {
+    return window.sessionStorage
+  } catch {
+    return null
+  }
+}
 
 export default router

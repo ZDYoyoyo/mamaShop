@@ -78,12 +78,46 @@ describe('ProductListView', () => {
     expect(wrapper.text()).toContain('找不到符合的商品')
   })
 
+  it('搜尋沒有結果時，可以按「看全部商品」清除條件', async () => {
+    vi.mocked(searchProducts).mockResolvedValue({ items: [], page: 1, size: 12, totalElements: 0, totalPages: 0 })
+    const { wrapper, router } = await mountAt('/products?keyword=不存在的東西')
+
+    await wrapper.findAll('button').find((b) => b.text() === '看全部商品').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.fullPath).toBe('/products')
+    expect(searchProducts).toHaveBeenLastCalledWith({ categoryId: null, keyword: '', page: 1, size: 12 })
+  })
+
+  it('沒有篩選條件時（全部商品就是空的），不顯示「看全部商品」', async () => {
+    vi.mocked(searchProducts).mockResolvedValue({ items: [], page: 1, size: 12, totalElements: 0, totalPages: 0 })
+
+    const { wrapper } = await mountAt('/products')
+
+    expect(wrapper.findAll('button').some((b) => b.text() === '看全部商品')).toBe(false)
+  })
+
   it('後端錯誤時顯示錯誤訊息', async () => {
     vi.mocked(searchProducts).mockRejectedValue(new Error('無法連線到伺服器，請檢查網路'))
 
     const { wrapper } = await mountAt('/products')
 
     expect(wrapper.text()).toContain('無法連線到伺服器')
+  })
+
+  it('載入失敗後按「重新載入」再查一次，成功就顯示商品', async () => {
+    vi.mocked(searchProducts).mockClear()
+    vi.mocked(searchProducts).mockRejectedValueOnce(new Error('無法連線到伺服器，請檢查網路'))
+    const { wrapper } = await mountAt('/products?categoryId=1')
+    expect(wrapper.text()).toContain('載入失敗')
+
+    await wrapper.findAll('button').find((b) => b.text() === '重新載入').trigger('click')
+    await flushPromises()
+
+    expect(searchProducts).toHaveBeenCalledTimes(2)
+    expect(searchProducts).toHaveBeenLastCalledWith({ categoryId: 1, keyword: '', page: 1, size: 12 })
+    expect(wrapper.text()).toContain('帆布托特包')
+    expect(wrapper.text()).not.toContain('載入失敗')
   })
 
   it('舊的請求比較晚回來時，不會蓋掉新的結果', async () => {
