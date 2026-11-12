@@ -8,21 +8,27 @@
  *
  * 選單項目在 ADMIN_MENU：之後每個後台功能（A02～A06）加一行。
  */
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
-import { DataLine, Menu as MenuIcon } from '@element-plus/icons-vue'
+import { DataLine, Expand, Goods } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 
 /** 後台選單：name 是路由名稱 */
-const ADMIN_MENU = [{ name: 'admin-home', title: '概覽', icon: DataLine }]
+const ADMIN_MENU = [
+  { name: 'admin-home', title: '概覽', icon: DataLine },
+  { name: 'admin-products', title: '商品', icon: Goods },
+]
 
 const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 
 const drawerOpen = ref(false)
+
+// 子頁面（例如編輯商品）用 meta.menu 指定要亮哪一項
+const activeMenu = computed(() => route.meta.menu ?? route.name)
 
 function go(name) {
   drawerOpen.value = false
@@ -40,7 +46,7 @@ function logout() {
   <div class="admin">
     <aside class="sidebar">
       <div class="sidebar-title">mamaShop 後台</div>
-      <el-menu :default-active="route.name" class="menu" @select="go">
+      <el-menu :default-active="activeMenu" class="menu" @select="go">
         <el-menu-item v-for="item in ADMIN_MENU" :key="item.name" :index="item.name">
           <el-icon><component :is="item.icon" /></el-icon>
           <span>{{ item.title }}</span>
@@ -50,7 +56,7 @@ function logout() {
 
     <!-- 手機：從左邊滑出的選單 -->
     <el-drawer v-model="drawerOpen" direction="ltr" size="240px" title="mamaShop 後台" class="admin-drawer">
-      <el-menu :default-active="route.name" class="menu" @select="go">
+      <el-menu :default-active="activeMenu" class="menu" @select="go">
         <el-menu-item v-for="item in ADMIN_MENU" :key="item.name" :index="item.name">
           <el-icon><component :is="item.icon" /></el-icon>
           <span>{{ item.title }}</span>
@@ -61,7 +67,7 @@ function logout() {
     <div class="body">
       <header class="topbar">
         <button type="button" class="menu-button" aria-label="開啟選單" @click="drawerOpen = true">
-          <el-icon :size="22"><MenuIcon /></el-icon>
+          <el-icon :size="22"><Expand /></el-icon>
         </button>
         <span class="topbar-title">mamaShop 後台</span>
         <div class="topbar-actions">

@@ -89,6 +89,25 @@ export const routes = [
         name: 'admin-home',
         component: () => import('@/views/admin/AdminHomeView.vue'),
       },
+      {
+        path: 'products',
+        name: 'admin-products',
+        component: () => import('@/views/admin/AdminProductsView.vue'),
+      },
+      {
+        path: 'products/new',
+        name: 'admin-product-new',
+        component: () => import('@/views/admin/AdminProductFormView.vue'),
+        // menu：左側選單要亮哪一項（新增、編輯頁都算「商品」）
+        meta: { menu: 'admin-products' },
+      },
+      {
+        path: 'products/:id(\\d+)/edit',
+        name: 'admin-product-edit',
+        component: () => import('@/views/admin/AdminProductFormView.vue'),
+        props: true,
+        meta: { menu: 'admin-products' },
+      },
     ],
   },
   {
