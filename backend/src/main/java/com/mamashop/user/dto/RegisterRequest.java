@@ -5,17 +5,12 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-/**
- * 註冊。
- * 密碼限制英數字與符號、8～72 字：BCrypt 最多只處理 72 bytes，
- * 中文字一個字就佔 3 bytes，超過的部分會被忽略或直接報錯。
- */
+/** 註冊。密碼規則見 {@link ValidPassword}。 */
 public record RegisterRequest(
         @NotBlank @Email @Size(max = 255)
         String email,
 
-        @NotBlank
-        @Pattern(regexp = "^[\\x21-\\x7E]{8,72}$", message = "需為 8 到 72 個英文字母、數字或符號")
+        @NotBlank @ValidPassword
         String password,
 
         @NotBlank @Size(max = 50)

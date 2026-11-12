@@ -135,7 +135,7 @@ mamaShop/
 - [x] **B11 測試**：`OrderService` 單元測試、Controller 權限與參數測試、~~多執行緒搶購併發測試（庫存 10、搶 50 次，驗證成功 10 筆）~~（已在 B08 完成）
 - [x] **B12 Docker 化**：多階段 `Dockerfile`、compose 加入後端、`.env.example`
 - [x] **B13 API 文件**：springdoc-openapi，Swagger UI 可帶 JWT 測試
-- [ ] **B14 管理員帳號管理**：ADMIN 可以新增其他 ADMIN 帳號、停用帳號（不刪除，保留操作紀錄）、重設密碼；不能停用自己
+- [x] **B14 管理員帳號管理**：ADMIN 可以新增其他 ADMIN 帳號、停用帳號（不刪除，保留操作紀錄）、重設密碼；不能停用自己
 
 ## 第 2 階段：前台
 
