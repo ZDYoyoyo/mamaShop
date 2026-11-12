@@ -118,6 +118,8 @@ async function cancel() {
 
 <style scoped>
 .back {
+  display: inline-block;
+  padding: 8px 0;
   font-size: 0.9rem;
   text-decoration: none;
 }

@@ -63,11 +63,11 @@ function lineTotal(item) {
               :model-value="item.quantity"
               :min="1"
               :max="Math.min(item.stock, 99)"
-              size="small"
+              class="quantity"
               :aria-label="`${item.name} 數量`"
               @update:model-value="(value) => cart.updateQuantity(item.productId, value)"
             />
-            <el-button link type="danger" @click="cart.removeItem(item.productId)">刪除</el-button>
+            <el-button link type="danger" class="remove" @click="cart.removeItem(item.productId)">刪除</el-button>
           </div>
         </div>
 
@@ -108,10 +108,28 @@ h1 {
 
 .item {
   display: grid;
-  grid-template-columns: 80px 1fr auto;
+  /* minmax(0, 1fr)：中間欄可以縮到比內容窄（長商品名換行），不會把右邊小計擠出畫面 */
+  grid-template-columns: 80px minmax(0, 1fr) auto;
   gap: 12px;
   padding: 12px 0;
   border-bottom: 1px solid var(--color-border);
+}
+
+/* 手機：小計移到數量下面靠右，讓數量和刪除按鈕有足夠的寬度 */
+@media (max-width: 480px) {
+  .item {
+    grid-template-columns: 72px minmax(0, 1fr);
+    row-gap: 4px;
+  }
+
+  .thumb {
+    grid-row: span 2;
+  }
+
+  .line-total {
+    grid-column: 2;
+    justify-self: end;
+  }
 }
 
 .thumb {
@@ -139,8 +157,18 @@ h1 {
 .controls {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   margin-top: 6px;
+}
+
+.quantity {
+  width: 116px;
+}
+
+/* 文字按鈕預設只有文字的高度，加上內距讓手指好按 */
+.remove {
+  height: auto;
+  padding: 8px;
 }
 
 .line-total {
