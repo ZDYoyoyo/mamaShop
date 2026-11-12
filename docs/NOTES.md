@@ -9,7 +9,7 @@ review PR 時搭配這份看；上線前（D08）再整份檢查一次。
 
 ## 尚未 review 的 PR
 
-PR #1–#9 已 merge，但你還沒看過。B 系列完成後一起研究。建議依序看，每個 PR 的重點列在下方各任務。
+PR #1–#17 已 merge，但你還沒看過。B 系列完成後一起研究。建議依序看，每個 PR 的重點列在下方各任務。
 
 | PR | 任務 | 狀態 |
 |---|---|---|
@@ -22,16 +22,16 @@ PR #1–#9 已 merge，但你還沒看過。B 系列完成後一起研究。建�
 | [#7](https://github.com/ZDYoyoyo/mamaShop/pull/7) | B05 商品查詢 API | 已 merge，未 review |
 | [#8](https://github.com/ZDYoyoyo/mamaShop/pull/8) | B06 會員與 JWT | 已 merge，未 review |
 | [#9](https://github.com/ZDYoyoyo/mamaShop/pull/9) | 新增本文件 | 已 merge，未 review |
-| [#10](https://github.com/ZDYoyoyo/mamaShop/pull/10) | B07 後台商品管理＋圖片上傳 | **未 merge** |
-| [#11](https://github.com/ZDYoyoyo/mamaShop/pull/11) | B08 建立訂單 | **未 merge** |
-| [#12](https://github.com/ZDYoyoyo/mamaShop/pull/12) | B09 顧客訂單功能 | **未 merge** |
-| [#13](https://github.com/ZDYoyoyo/mamaShop/pull/13) | B10 後台訂單管理 | **未 merge** |
-| [#14](https://github.com/ZDYoyoyo/mamaShop/pull/14) | B11 測試 | **未 merge** |
-| [#15](https://github.com/ZDYoyoyo/mamaShop/pull/15) | B12 Docker 化 | **未 merge** |
-| [#16](https://github.com/ZDYoyoyo/mamaShop/pull/16) | B13 API 文件 | **未 merge** |
-| [#17](https://github.com/ZDYoyoyo/mamaShop/pull/17) | B14 管理員帳號管理 | **未 merge** |
+| [#10](https://github.com/ZDYoyoyo/mamaShop/pull/10) | B07 後台商品管理＋圖片上傳 | 已 merge，未 review |
+| [#11](https://github.com/ZDYoyoyo/mamaShop/pull/11) | B08 建立訂單 | 已 merge，未 review |
+| [#12](https://github.com/ZDYoyoyo/mamaShop/pull/12) | B09 顧客訂單功能 | 已 merge，未 review |
+| [#13](https://github.com/ZDYoyoyo/mamaShop/pull/13) | B10 後台訂單管理 | 已 merge，未 review |
+| [#14](https://github.com/ZDYoyoyo/mamaShop/pull/14) | B11 測試 | 已 merge，未 review |
+| [#15](https://github.com/ZDYoyoyo/mamaShop/pull/15) | B12 Docker 化 | 已 merge，未 review |
+| [#16](https://github.com/ZDYoyoyo/mamaShop/pull/16) | B13 API 文件 | 已 merge，未 review |
+| [#17](https://github.com/ZDYoyoyo/mamaShop/pull/17) | B14 管理員帳號管理 | 已 merge，未 review |
 
-> #10～#17 是一個接一個開出來的分支，**要依序 merge**。
+> #10～#17 已依序 merge。
 
 ---
 
@@ -275,3 +275,22 @@ PR #1–#9 已 merge，但你還沒看過。B 系列完成後一起研究。建�
 - 🔲 **改自己的密碼不需要輸入舊密碼**：有人拿到已登入的電腦就能改密碼。之後可以加「修改自己的密碼」API 並要求舊密碼
 - 🔲 **顧客沒有改密碼／忘記密碼功能**（需要寄信，M01 之後）
 - 🔲 **管理員之間沒有權限分級**：任何管理員都能新增、停用其他管理員、重設任何管理員的密碼。家人使用沒問題；如果之後給其他人用，要加超級管理員角色
+
+---
+
+# 第 2 階段：前台
+
+## F01 初始化前端
+
+- ℹ️ 用 Vue 官方的 `create-vue` 建立（Vue 3.5、Vue Router 5、Pinia 4、Vite 8、Vitest、ESLint），再加 Axios
+- ℹ️ **用 JavaScript，沒有用 TypeScript**：降低學習負擔。之後想加可以逐步轉換
+- ℹ️ **Vite proxy**：開發時 `/api`、`/uploads` 轉給 `localhost:8080`，瀏覽器只看到 `localhost:5173`，不會遇到 CORS。前端程式一律用相對路徑 `/api`，正式環境由 Nginx 做一樣的轉發（D03）
+- ℹ️ **`api/http.js`**（axios 攔截器）：自動帶 `Authorization`；成功時直接回傳 `data`；錯誤統一轉成 `ApiError`（`status`、`code`、`message`、`fieldErrors`）；401 時登出並導向登入頁，帶 `redirect` 參數。登入 API 自己的 401（密碼錯誤）要傳 `skipAuthRedirect: true`
+- ℹ️ **token 存在 localStorage**（`stores/auth.js`）：重新整理、開新分頁都保持登入。風險是 XSS：Vue 預設會跳脫輸出、**專案不使用 `v-html`**、正式環境加 CSP（D03）。改用 httpOnly cookie 要改後端（CSRF 防護），目前不值得
+- ℹ️ 路由用 `createWebHistory`（網址沒有 `#`）。**正式環境 Nginx 要設定 `try_files $uri /index.html`**，否則直接開 `/products/1` 會 404（D03）
+- ℹ️ 首頁目前只顯示分類列表，用來確認整條連線是通的；F02 會換成真正的首頁。登入頁是空殼，F04 實作；需要登入的路由守衛也在 F04
+- ℹ️ **npm 10 的 bug**：`npm install` 在解析選用的 peer dependency 時會出現 `Cannot read properties of null (reading 'edgesOut')`。已用 npm 11 產生 `package-lock.json`，**之後請用 `npm ci`**（照 lock 檔安裝，npm 10 也沒問題）
+- ℹ️ `npm audit`：正式依賴 0 個漏洞；開發工具有 11 個 moderate（不會打包進網站）
+- ℹ️ `frontend/.gitattributes`（create-vue 附的）已設定 LF 換行
+- 🔲 **UI 元件庫**：PLAN 寫 Element Plus 用在後台（A01）。前台要不要也用，F02 時決定
+- 🔲 **CI（D06）** 要加 `npm ci`、`npm run lint`、`npm run test:unit -- --run`、`npm run build`

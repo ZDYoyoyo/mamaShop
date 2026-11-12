@@ -1,0 +1,28 @@
+/* 全站共用的基本樣式。顏色集中定義成變數，之後調整風格只改這裡。 */
+:root {
+  --color-text: #2c2c2c;
+  --color-muted: #6b6b6b;
+  --color-border: #e5e5e5;
+  --color-background: #ffffff;
+  --color-primary: #b5651d;
+  --color-danger: #c0392b;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+  line-height: 1.6;
+  color: var(--color-text);
+  background: var(--color-background);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+a {
+  color: var(--color-primary);
+}
