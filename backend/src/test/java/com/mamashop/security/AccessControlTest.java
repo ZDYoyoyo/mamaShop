@@ -104,7 +104,11 @@ class AccessControlTest {
                 e("POST", "/api/admin/orders/{orderNo}/deliver", Access.ADMIN),
                 e("POST", "/api/admin/orders/{orderNo}/complete", Access.ADMIN),
                 e("POST", "/api/admin/orders/{orderNo}/cancel", Access.ADMIN),
-                e("POST", "/api/admin/orders/{orderNo}/return", Access.ADMIN));
+                e("POST", "/api/admin/orders/{orderNo}/return", Access.ADMIN),
+                e("GET", "/api/admin/admins", Access.ADMIN),
+                e("POST", "/api/admin/admins", Access.ADMIN),
+                e("PATCH", "/api/admin/admins/{id}/enabled", Access.ADMIN),
+                e("PUT", "/api/admin/admins/{id}/password", Access.ADMIN));
     }
 
     @Autowired private MockMvc mockMvc;

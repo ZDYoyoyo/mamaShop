@@ -22,13 +22,23 @@ PR #1–#9 已 merge，但你還沒看過。B 系列完成後一起研究。建�
 | [#7](https://github.com/ZDYoyoyo/mamaShop/pull/7) | B05 商品查詢 API | 已 merge，未 review |
 | [#8](https://github.com/ZDYoyoyo/mamaShop/pull/8) | B06 會員與 JWT | 已 merge，未 review |
 | [#9](https://github.com/ZDYoyoyo/mamaShop/pull/9) | 新增本文件 | 已 merge，未 review |
+| [#10](https://github.com/ZDYoyoyo/mamaShop/pull/10) | B07 後台商品管理＋圖片上傳 | **未 merge** |
+| [#11](https://github.com/ZDYoyoyo/mamaShop/pull/11) | B08 建立訂單 | **未 merge** |
+| [#12](https://github.com/ZDYoyoyo/mamaShop/pull/12) | B09 顧客訂單功能 | **未 merge** |
+| [#13](https://github.com/ZDYoyoyo/mamaShop/pull/13) | B10 後台訂單管理 | **未 merge** |
+| [#14](https://github.com/ZDYoyoyo/mamaShop/pull/14) | B11 測試 | **未 merge** |
+| [#15](https://github.com/ZDYoyoyo/mamaShop/pull/15) | B12 Docker 化 | **未 merge** |
+| [#16](https://github.com/ZDYoyoyo/mamaShop/pull/16) | B13 API 文件 | **未 merge** |
+| [#17](https://github.com/ZDYoyoyo/mamaShop/pull/17) | B14 管理員帳號管理 | **未 merge** |
+
+> #10～#17 是一個接一個開出來的分支，**要依序 merge**。
 
 ---
 
 ## 上線前一定要處理（D08 檢查清單）
 
 - 🔲 **運費**：`shipping_methods` 目前是暫定值（宅配 100、超商 60），請家人確認後在後台調整（B07 之後才有後台）
-- 🔲 **預設管理員密碼**：上線後登入修改，並從伺服器環境變數移除 `ADMIN_PASSWORD`（B14 才有改密碼功能）
+- 🔲 **預設管理員密碼**：上線後用 `PUT /api/admin/admins/{id}/password` 修改（B14），並從伺服器環境變數移除 `ADMIN_PASSWORD`
 - 🔲 **`JWT_SECRET`**：正式環境要用 `openssl rand -base64 48` 產生新的，不要沿用本機的
 - 🔲 **正式環境不要設定 `APP_PROFILE=dev`**，否則會寫入測試商品
 - 🔲 **上傳目錄要掛 Docker volume 並納入備份**（D03、D05），否則重建容器時商品圖片會消失
@@ -244,3 +254,24 @@ PR #1–#9 已 merge，但你還沒看過。B 系列完成後一起研究。建�
 - ℹ️ 新增 API 時記得加 `@Operation(summary = "...")`，否則 Swagger UI 只會顯示方法名稱
 - 🔲 **沒有為每個錯誤情況寫回應範例**（例如 409 的內容），只有成功回應的結構；需要的話可以加 `@ApiResponse`
 - 🔲 **如果想讓面試官線上試用 API**：可以在正式環境開啟，但建議另外加 Nginx 的 Basic Auth 保護，或只開展示站
+
+## B14 管理員帳號管理
+
+| API（`/api/admin/admins`） | 說明 |
+|---|---|
+| `GET /` | 管理員列表 |
+| `POST /` | 新增管理員 |
+| `PATCH /{id}/enabled` | 停用／啟用（不能停用自己） |
+| `PUT /{id}/password` | 重設密碼 |
+
+- ℹ️ **新增 Flyway V2**：`users.password_changed_at`。專案第一個 schema 變更，示範「不改 V1、新增 V2」
+- ℹ️ **和 PLAN 不同（多做的）：重設密碼後，之前發出的 token 全部失效**。JWT 無狀態，伺服器不知道發過哪些 token；改成比對 token 的發行時間（`iat`）是否早於密碼修改時間。否則重設密碼後，被盜用的 token 仍可用到過期（最長 1 天），重設就失去意義
+- ℹ️ 比對時把密碼修改時間取到「秒」（`iat` 只精確到秒），避免同一秒內改密碼又重新登入的新 token 被誤判
+- ℹ️ **停用立即生效**：B06 的 Filter 本來就每次請求讀會員狀態
+- ℹ️ 只管理 ADMIN 帳號；顧客帳號的 id 會回 404
+- ℹ️ 不提供刪除：狀態紀錄還參照管理員帳號，刪了就不知道是誰操作的
+- ℹ️ 密碼規則抽成 `@ValidPassword`（組合註解），註冊、新增管理員、重設密碼共用
+- ℹ️ 反向驗證：拿掉 Filter 的密碼時間檢查 → `resetPassword_invalidatesTokensIssuedBefore` 失敗
+- 🔲 **改自己的密碼不需要輸入舊密碼**：有人拿到已登入的電腦就能改密碼。之後可以加「修改自己的密碼」API 並要求舊密碼
+- 🔲 **顧客沒有改密碼／忘記密碼功能**（需要寄信，M01 之後）
+- 🔲 **管理員之間沒有權限分級**：任何管理員都能新增、停用其他管理員、重設任何管理員的密碼。家人使用沒問題；如果之後給其他人用，要加超級管理員角色

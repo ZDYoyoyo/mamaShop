@@ -53,20 +53,31 @@ public class JwtService {
     }
 
     /**
-     * 驗證簽章與有效期限，成功回傳會員 id。
+     * 驗證簽章與有效期限，成功回傳 token 內容（會員 id、發行時間）。
      * 簽章不符（被竄改）、過期、格式錯誤都回傳 empty，不丟例外：交給權限設定決定要不要擋。
      */
-    public Optional<Long> parseUserId(String token) {
+    public Optional<TokenClaims> parse(String token) {
         try {
             Claims claims = Jwts.parser()
                     .verifyWith(key)
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
-            return Optional.of(Long.valueOf(claims.getSubject()));
+            if (claims.getIssuedAt() == null) {
+                return Optional.empty();
+            }
+            return Optional.of(new TokenClaims(Long.valueOf(claims.getSubject()), claims.getIssuedAt().toInstant()));
         } catch (JwtException | IllegalArgumentException e) {
             return Optional.empty();
         }
+    }
+
+    /**
+     * 驗證通過的 token 內容。
+     *
+     * @param issuedAt 發行時間（JWT 的 iat，精確到秒）。用來判斷 token 是否在改密碼之前發出
+     */
+    public record TokenClaims(Long userId, Instant issuedAt) {
     }
 
     public Duration getExpiration() {

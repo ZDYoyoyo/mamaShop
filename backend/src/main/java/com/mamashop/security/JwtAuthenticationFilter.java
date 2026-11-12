@@ -7,6 +7,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContext;
@@ -42,13 +44,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (header != null && header.startsWith(BEARER_PREFIX)) {
             String token = header.substring(BEARER_PREFIX.length());
-            jwtService.parseUserId(token)
-                    // 每次都從資料庫讀會員：帳號被停用、角色被調整時立刻生效
-                    .flatMap(userRepository::findById)
-                    .filter(User::isEnabled)
-                    .ifPresent(this::authenticate);
+            jwtService.parse(token).ifPresent(claims ->
+                    // 每次都從資料庫讀會員：帳號被停用、角色被調整、密碼被重設時立刻生效
+                    userRepository.findById(claims.userId())
+                            .filter(User::isEnabled)
+                            .filter(user -> !issuedBeforePasswordChange(claims, user))
+                            .ifPresent(this::authenticate));
         }
         chain.doFilter(request, response);
+    }
+
+    /**
+     * token 是否在密碼修改之前發出（B14：重設密碼後，舊的登入全部失效）。
+     * JWT 的 iat 只精確到秒，所以密碼修改時間也取到秒再比較：
+     * 同一秒內改密碼又登入的新 token 不會被誤判成舊的。
+     */
+    private static boolean issuedBeforePasswordChange(JwtService.TokenClaims claims, User user) {
+        Instant changedAt = user.getPasswordChangedAt();
+        return changedAt != null && claims.issuedAt().isBefore(changedAt.truncatedTo(ChronoUnit.SECONDS));
     }
 
     private void authenticate(User user) {

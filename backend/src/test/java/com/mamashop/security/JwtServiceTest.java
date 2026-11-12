@@ -31,7 +31,7 @@ class JwtServiceTest {
     void parseGarbage_returnsEmpty() {
         JwtService service = new JwtService(new JwtProperties("x".repeat(48), Duration.ofDays(1)));
 
-        assertThat(service.parseUserId("not.a.jwt")).isEmpty();
-        assertThat(service.parseUserId("")).isEmpty();
+        assertThat(service.parse("not.a.jwt")).isEmpty();
+        assertThat(service.parse("")).isEmpty();
     }
 }

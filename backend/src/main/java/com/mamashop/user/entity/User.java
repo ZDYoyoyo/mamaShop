@@ -47,6 +47,10 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** 密碼最後修改時間；早於這個時間發出的 JWT 一律無效（見 JwtAuthenticationFilter） */
+    @Column(name = "password_changed_at")
+    private Instant passwordChangedAt;
+
     public User() {
     }
 
@@ -108,5 +112,15 @@ public class User {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public Instant getPasswordChangedAt() {
+        return passwordChangedAt;
+    }
+
+    /** 更換密碼：同時記錄時間，讓之前發出的 token 失效 */
+    public void changePassword(String newPasswordHash, Instant now) {
+        this.passwordHash = newPasswordHash;
+        this.passwordChangedAt = now;
     }
 }
