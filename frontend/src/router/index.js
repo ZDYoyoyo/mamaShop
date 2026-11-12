@@ -36,6 +36,19 @@ export const routes = [
     component: () => import('@/views/CartView.vue'),
   },
   {
+    path: '/checkout',
+    name: 'checkout',
+    component: () => import('@/views/CheckoutView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/checkout/complete/:orderNo',
+    name: 'checkout-complete',
+    component: () => import('@/views/CheckoutCompleteView.vue'),
+    props: true,
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('@/views/LoginView.vue'),
