@@ -44,6 +44,8 @@ public class SecurityConfig {
                         // 前台瀏覽商品不用登入（只開放 GET）
                         .requestMatchers(HttpMethod.GET,
                                 "/api/categories/**", "/api/products/**", "/api/shipping-methods/**").permitAll()
+                        // 商品圖片（B07）
+                        .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
                         // 例外發生時 Spring Boot 會轉到 /error；不開放的話真正的錯誤會被蓋成 401
                         .requestMatchers("/error").permitAll()
                         // 後台

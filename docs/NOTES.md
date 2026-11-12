@@ -9,7 +9,7 @@ review PR 時搭配這份看；上線前（D08）再整份檢查一次。
 
 ## 尚未 review 的 PR
 
-PR #1–#7 已 merge，但你還沒看過。建議依序看，每個 PR 的重點列在下方各任務。
+PR #1–#9 已 merge，但你還沒看過。B 系列完成後一起研究。建議依序看，每個 PR 的重點列在下方各任務。
 
 | PR | 任務 | 狀態 |
 |---|---|---|
@@ -20,7 +20,8 @@ PR #1–#7 已 merge，但你還沒看過。建議依序看，每個 PR 的重�
 | [#5](https://github.com/ZDYoyoyo/mamaShop/pull/5) | B03 Entity | 已 merge，未 review |
 | [#6](https://github.com/ZDYoyoyo/mamaShop/pull/6) | B04 共用基礎 | 已 merge，未 review |
 | [#7](https://github.com/ZDYoyoyo/mamaShop/pull/7) | B05 商品查詢 API | 已 merge，未 review |
-| [#8](https://github.com/ZDYoyoyo/mamaShop/pull/8) | B06 會員與 JWT | **未 merge** |
+| [#8](https://github.com/ZDYoyoyo/mamaShop/pull/8) | B06 會員與 JWT | 已 merge，未 review |
+| [#9](https://github.com/ZDYoyoyo/mamaShop/pull/9) | 新增本文件 | 已 merge，未 review |
 
 ---
 
@@ -30,6 +31,7 @@ PR #1–#7 已 merge，但你還沒看過。建議依序看，每個 PR 的重�
 - 🔲 **預設管理員密碼**：上線後登入修改，並從伺服器環境變數移除 `ADMIN_PASSWORD`（B14 才有改密碼功能）
 - 🔲 **`JWT_SECRET`**：正式環境要用 `openssl rand -base64 48` 產生新的，不要沿用本機的
 - 🔲 **正式環境不要設定 `APP_PROFILE=dev`**，否則會寫入測試商品
+- 🔲 **上傳目錄要掛 Docker volume 並納入備份**（D03、D05），否則重建容器時商品圖片會消失
 - 🔲 **登入失敗次數限制**：目前沒有，可能被暴力破解（建議 Nginx rate limit 或 R 階段用 Redis）
 
 ---
@@ -65,6 +67,9 @@ PR #1–#7 已 merge，但你還沒看過。建議依序看，每個 PR 的重�
 
 ### 和 B08 有關的限制
 
+ℹ️ B08 原本計畫自己寫，後來改由 Claude 實作（B 系列完成後再整體研究）。
+
+
 - `order_items` 有 `UNIQUE (order_id, product_id)`：購物車同一商品出現兩次要先合併數量
 - `orders.status` 沒有預設值，建立時要明確設定 `PENDING_CONFIRM`
 - `total_amount = items_amount + shipping_fee`、`subtotal = unit_price * quantity` 都是**完全相等**的 CHECK，`BigDecimal` 計算要精確
@@ -87,7 +92,7 @@ PR #1–#7 已 merge，但你還沒看過。建議依序看，每個 PR 的重�
 
 ## B05 商品查詢 API
 
-- 🔲 **圖片網址**：`imageUrl` 目前直接回傳 `image_path`，格式在 B07 決定
+- ✅ **圖片網址**：B07 決定為 `/uploads/{image_path}`
 - 🔲 **要不要讓顧客看到精確庫存**：目前回傳 `stock` 數字。可以改成只顯示「已售完」或「剩少量」，請和家人討論
 - 🔲 **售完的商品**目前仍會出現在列表（`stock = 0` 但 `ON_SALE`），前端要顯示「已售完」；或改成不顯示
 - ℹ️ 關鍵字只搜尋商品名稱，不搜尋描述
@@ -95,7 +100,7 @@ PR #1–#7 已 merge，但你還沒看過。建議依序看，每個 PR 的重�
 - ℹ️ 不存在的 `categoryId` 回傳空列表，不是 404
 - ℹ️ Windows cmd 的 curl 送中文參數會亂碼，搜尋功能請用 Swagger UI（B13）或前端測
 
-## B06 會員與 JWT（PR #8，未 merge）
+## B06 會員與 JWT
 
 - ℹ️ **jjwt 0.13 + jjwt-gson**：jjwt 的 Jackson 模組還是 Jackson 2，為了不和 Spring Boot 4 的 Jackson 3 混用，改用 Gson 模組
 - ℹ️ **401 和 404**：沒登入時打不存在的路徑會回 401，不是 404（Security 先擋）
@@ -105,3 +110,33 @@ PR #1–#7 已 merge，但你還沒看過。建議依序看，每個 PR 的重�
 - 🔲 **沒做**：refresh token、忘記密碼、Email 驗證（需要寄信，可以在 M01 之後再考慮）
 - 🔲 **前端 token 存放位置**：在 F01 決定（localStorage 有 XSS 風險，要評估）
 - ℹ️ `/api/users/me` 是額外加的（PLAN 沒有列），用來驗證登入狀態，F04 也會用到
+
+## B07 後台商品管理＋圖片上傳
+
+新增的後台 API（都在 `/api/admin/**`，限 ADMIN）：
+
+| API | 說明 |
+|---|---|
+| `GET/POST /api/admin/categories`、`PUT/DELETE /api/admin/categories/{id}` | 分類 CRUD |
+| `GET /api/admin/products`、`GET /api/admin/products/{id}` | 商品列表（含下架，可依狀態篩選）、詳情 |
+| `POST /api/admin/products`、`PUT /api/admin/products/{id}` | 新增、修改基本資料 |
+| `PATCH /api/admin/products/{id}/status` | 上架／下架 |
+| `PATCH /api/admin/products/{id}/stock` | 調整庫存（增減量） |
+| `POST /api/admin/products/{id}/image` | 上傳／更換圖片（multipart，欄位 `file`） |
+| `GET /api/admin/shipping-methods`、`PUT /api/admin/shipping-methods/{id}` | 運送方式與運費 |
+
+- ℹ️ **和 PLAN 不同：庫存不能「直接設定成某個數字」**，只能用增減量調整（`{"delta": 5}`）。直接設定會覆蓋掉同時間顧客下單扣掉的庫存（lost update）。修改商品基本資料（PUT）也不會動到庫存
+- ℹ️ **新商品預設下架**：建好、上傳圖片、確認無誤後再上架
+- ℹ️ **商品不提供刪除**：舊訂單明細會參照商品，不賣了就下架
+- ℹ️ **分類只能刪除沒有商品的**；分類名稱不能重複
+- ℹ️ **運送方式不能新增或刪除**（種類由程式定義），只能改名稱、運費、啟用、排序；至少要保留一種啟用中
+- ℹ️ 圖片只接受 **JPG、PNG、WebP**，上限 **10MB**；用檔案內容判斷格式，不相信副檔名
+- ℹ️ 圖片檔名一律改成 UUID；換圖片時，舊檔在資料庫 commit 成功後才刪除，失敗則刪除新檔
+- ℹ️ `/uploads/**` 不用登入就能讀（商品圖片本來就公開），瀏覽器快取 1 年（檔名不會重複，所以安全）
+- ℹ️ 本機上傳的檔案在 `backend/uploads/`（已在 `.gitignore`）
+- ℹ️ MockMvc 測試不會經過 Tomcat 的上傳大小限制，所以程式內也檢查一次大小；Tomcat 那層用 curl 實測過（11MB → 413）
+- 🔲 **iPhone 預設的 HEIC 格式不支援**：家人用 iPhone 拍照要把相機設成「最相容」，或在後台前端（A02）上傳前轉檔
+- 🔲 **照片的 EXIF 沒有移除**：手機照片可能含拍攝地點（GPS），在家拍的商品照會洩漏住址。建議 A02 上傳前在前端壓縮（用 canvas 重新輸出會去掉 EXIF），或之後在後端重新編碼
+- 🔲 **沒有縮圖或壓縮**：手機照片動輒 3–5MB，列表頁會很慢。同樣建議 A02 上傳前壓縮
+- 🔲 **每個商品只有一張圖片**（PLAN 的 `image_path` 是單一欄位）；要多張圖需要新的資料表
+- ℹ️ `ProductRepository.findAll(spec, pageable)` 加了 `@EntityGraph`，前台商品列表（B05）的查詢也會一起 JOIN 分類，查詢數仍是 2 個

@@ -8,4 +8,9 @@ public interface ShippingMethodRepository extends JpaRepository<ShippingMethod, 
 
     /** 前台只顯示啟用中的運送方式 */
     List<ShippingMethod> findByEnabledTrueOrderBySortOrderAscIdAsc();
+
+    /** 後台：全部 */
+    List<ShippingMethod> findAllByOrderBySortOrderAscIdAsc();
+
+    long countByEnabledTrue();
 }

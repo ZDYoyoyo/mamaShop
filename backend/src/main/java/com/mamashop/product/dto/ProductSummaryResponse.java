@@ -15,7 +15,6 @@ public record ProductSummaryResponse(Long id, String name, BigDecimal price, int
                 product.getName(),
                 product.getPrice(),
                 product.getStock(),
-                // 圖片網址的格式在 B07（圖片上傳）決定，目前直接回傳 image_path
-                product.getImagePath());
+                ProductImages.toUrl(product.getImagePath()));
     }
 }

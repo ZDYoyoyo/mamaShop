@@ -20,6 +20,12 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
 
+  servlet:
+    multipart:
+      # 上傳檔案大小上限（Tomcat 層級，超過時根本不會進到程式）
+      max-file-size: 10MB
+      max-request-size: 11MB
+
   jpa:
     hibernate:
       # Schema 只由 Flyway 管理，Hibernate 只檢查 Entity 和資料表是否一致
@@ -42,3 +48,8 @@ app:
     email: ${ADMIN_EMAIL:}
     password: ${ADMIN_PASSWORD:}
     name: ${ADMIN_NAME:管理員}
+  upload:
+    # 上傳檔案存放的目錄（相對路徑以啟動時的工作目錄為準）；正式環境會掛 Docker volume
+    dir: ${UPLOAD_DIR:./uploads}
+    # 圖片大小上限（程式內再檢查一次）
+    max-image-size: 10MB

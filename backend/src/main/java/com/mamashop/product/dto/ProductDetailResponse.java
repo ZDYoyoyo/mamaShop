@@ -21,8 +21,7 @@ public record ProductDetailResponse(
                 product.getDescription(),
                 product.getPrice(),
                 product.getStock(),
-                // 圖片網址的格式在 B07（圖片上傳）決定，目前直接回傳 image_path
-                product.getImagePath(),
+                ProductImages.toUrl(product.getImagePath()),
                 product.getCategory().getId(),
                 product.getCategory().getName());
     }

@@ -21,7 +21,21 @@ public enum ErrorCode {
     // ===== 會員 =====
     EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "此 Email 已經註冊過"),
     // 不區分「帳號不存在」和「密碼錯誤」，避免被拿來試探哪些 Email 有註冊
-    INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "Email 或密碼錯誤");
+    INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "Email 或密碼錯誤"),
+
+    // ===== 檔案上傳 =====
+    INVALID_IMAGE(HttpStatus.BAD_REQUEST, "只接受 JPG、PNG、WebP 格式的圖片"),
+    FILE_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "檔案超過大小上限（10MB）"),
+
+    // ===== 分類 =====
+    CATEGORY_NAME_EXISTS(HttpStatus.CONFLICT, "分類名稱已存在"),
+    CATEGORY_HAS_PRODUCTS(HttpStatus.CONFLICT, "分類底下還有商品，請先移動或刪除商品"),
+
+    // ===== 商品 =====
+    STOCK_ADJUSTMENT_INVALID(HttpStatus.CONFLICT, "調整後庫存不可小於 0"),
+
+    // ===== 運送方式 =====
+    LAST_SHIPPING_METHOD(HttpStatus.CONFLICT, "至少要保留一種啟用中的運送方式");
 
     private final HttpStatus status;
     private final String defaultMessage;

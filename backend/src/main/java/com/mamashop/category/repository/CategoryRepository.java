@@ -8,4 +8,9 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
 
     /** Spring Data 依方法名稱產生查詢：ORDER BY sort_order ASC, id ASC */
     List<Category> findAllByOrderBySortOrderAscIdAsc();
+
+    boolean existsByName(String name);
+
+    /** 修改時檢查名稱重複：排除自己 */
+    boolean existsByNameAndIdNot(String name, Long id);
 }
