@@ -292,5 +292,29 @@ PR #1–#17 已 merge，但你還沒看過。B 系列完成後一起研究。建
 - ℹ️ **npm 10 的 bug**：`npm install` 在解析選用的 peer dependency 時會出現 `Cannot read properties of null (reading 'edgesOut')`。已用 npm 11 產生 `package-lock.json`，**之後請用 `npm ci`**（照 lock 檔安裝，npm 10 也沒問題）
 - ℹ️ `npm audit`：正式依賴 0 個漏洞；開發工具有 11 個 moderate（不會打包進網站）
 - ℹ️ `frontend/.gitattributes`（create-vue 附的）已設定 LF 換行
-- 🔲 **UI 元件庫**：PLAN 寫 Element Plus 用在後台（A01）。前台要不要也用，F02 時決定
+- ✅ **UI 元件庫**：前台也用 Element Plus（F02 決定）
 - 🔲 **CI（D06）** 要加 `npm ci`、`npm run lint`、`npm run test:unit -- --run`、`npm run build`
+
+## F02 商品瀏覽
+
+| 網址 | 頁面 |
+|---|---|
+| `/` | 首頁：搜尋、分類入口、最新上架 8 件 |
+| `/products?categoryId=&keyword=&page=` | 商品列表：分類、關鍵字、分頁（每頁 12 件） |
+| `/products/:id` | 商品詳情（下架或不存在顯示「找不到這個商品」） |
+
+- ℹ️ **前台也用 Element Plus**（你選的第 1 種），**按需載入**（`unplugin-vue-components`）：只打包用到的元件，JS 約 145KB（gzip）
+- ℹ️ **主題色改成棕色**：覆蓋 `--el-color-primary` 系列變數。選擇器要用 `html:root`，因為 Element Plus 的 CSS 晚載入，`:root` 會被它蓋回藍色（實際踩過）
+- ℹ️ **篩選條件存在網址上**：重新整理、分享連結、按「上一頁」都正確。在某個分類裡搜尋時，會在該分類內搜尋
+- ℹ️ **連續快速切換分類**：舊請求比新請求晚回來時會被丟掉，不會蓋掉正確結果（有測試）
+- ℹ️ **元件結構**：`ProductCard`（一個商品）、`ProductGrid`（格狀列表＋載入骨架＋空狀態）、`ProductImage`（沒圖片顯示「暫無圖片」）、`CategoryChips`（可左右滑的分類按鈕）、`SearchBox`；API 呼叫集中在 `api/catalog.js`
+- ℹ️ **商品描述用 `white-space: pre-wrap` 顯示換行，不用 `v-html`**（避免 XSS，有測試）
+- ℹ️ 手機一排 2 個、平板 3 個、電腦 4 個
+- ℹ️ 金額只用來「顯示」（`formatPrice`），前端不做金額計算
+- 🔲 **庫存顯示規則**（待和家人確認）：售完顯示「已售完」、剩 5 件以下顯示「僅剩 N 件」、其餘不顯示。門檻在 `utils/format.js` 的 `LOW_STOCK_THRESHOLD`
+- 🔲 **售完的商品仍會出現在列表**（淡化＋「已售完」標籤）。如果希望直接隱藏，要改後端查詢
+- 🔲 **首頁的標語**「包包與布料／每一件都是家裡用心挑選、製作的商品」是暫定的，請家人提供正式文案
+- 🔲 **「加入購物車」按鈕**在 F03 加到商品詳情頁
+- ℹ️ 測試踩到的兩個坑（已修正並在程式裡註解）：
+  - `watch(..., { immediate: true })` 寫在它用到的 `let` 變數宣告之前 → 一進頁面就錯（真的 bug，瀏覽器裡也會壞）
+  - `beforeEach(() => mock.mockReset())` 沒加大括號 → 回傳的函式被 Vitest 當成清理函式，每個測試結束都多呼叫一次

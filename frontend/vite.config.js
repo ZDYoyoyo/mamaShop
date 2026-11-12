@@ -4,13 +4,24 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
+import Components from 'unplugin-vue-components/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 // 後端位置：預設是本機的 Spring Boot（mvnw spring-boot:run 或 docker compose）
 const backendUrl = process.env.BACKEND_URL ?? 'http://localhost:8080'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [vue(), vueDevTools()],
+  plugins: [
+    vue(),
+    vueDevTools(),
+    // Element Plus 按需載入：模板裡用到 <el-button> 才把按鈕的程式和樣式打包進來，
+    // 不用在 main.js 整套 app.use(ElementPlus)，網站下載的檔案小很多（手機上比較快）
+    Components({
+      resolvers: [ElementPlusResolver()],
+      dts: false,
+    }),
+  ],
   resolve: {
     alias: {
       // import '@/api/http' = import 'src/api/http'
