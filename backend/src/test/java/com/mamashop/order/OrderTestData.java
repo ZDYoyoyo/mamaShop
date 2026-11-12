@@ -76,6 +76,16 @@ class OrderTestData {
         return other;
     }
 
+    /** 管理員（後台操作用），cleanUp 時一起刪除 */
+    User adminUser(String name) {
+        User admin = createUser();
+        admin.setRole(Role.ADMIN);
+        admin.setName(name);
+        admin = userRepository.save(admin);
+        extraUsers.add(admin);
+        return admin;
+    }
+
     private User createUser() {
         User u = new User();
         u.setEmail("order-test-" + UUID.randomUUID().toString().substring(0, 8) + "@example.com");
@@ -94,6 +104,9 @@ class OrderTestData {
             jdbc.update("DELETE FROM order_status_histories WHERE order_id IN (SELECT id FROM orders WHERE user_id = ?)", userId);
             jdbc.update("DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE user_id = ?)", userId);
             jdbc.update("DELETE FROM orders WHERE user_id = ?", userId);
+        }
+        for (User u : users) {
+            jdbc.update("DELETE FROM order_status_histories WHERE operator_id = ?", u.getId());
         }
         jdbc.update("DELETE FROM products WHERE category_id = ?", category.getId());
         jdbc.update("DELETE FROM categories WHERE id = ?", category.getId());

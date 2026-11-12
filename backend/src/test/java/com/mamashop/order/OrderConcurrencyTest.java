@@ -6,6 +6,7 @@ import com.mamashop.category.repository.CategoryRepository;
 import com.mamashop.common.exception.BusinessException;
 import com.mamashop.common.exception.ErrorCode;
 import com.mamashop.order.dto.CreateOrderRequest;
+import com.mamashop.order.service.AdminOrderService;
 import com.mamashop.order.service.OrderService;
 import com.mamashop.product.entity.Product;
 import com.mamashop.product.entity.ProductStatus;
@@ -38,6 +39,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class OrderConcurrencyTest {
 
     @Autowired private OrderService orderService;
+    @Autowired private AdminOrderService adminOrderService;
     @Autowired private UserRepository userRepository;
     @Autowired private CategoryRepository categoryRepository;
     @Autowired private ProductRepository productRepository;
@@ -120,6 +122,39 @@ class OrderConcurrencyTest {
         assertThat(result.unexpected).allSatisfy(e -> assertThat(e).isInstanceOfAny(
                 BusinessException.class, OptimisticLockingFailureException.class));
         assertThat(data.stockOf(product)).isEqualTo(10);
+    }
+
+    @Test
+    void adminsActOnSameOrderAtTheSameMoment_onlyOneWins() throws Exception {
+        // 兩位管理員拿著同一個版本號（0）同時按下：一半按「確認」、一半按「取消」。
+        // 版本號比對都會通過（大家讀到的都是 0），要靠 @Version 在寫入時擋下後到的
+        Product product = data.product("帆布包", "500.00", 10, ProductStatus.ON_SALE);
+        String orderNo = orderService.createOrder(data.user().getId(), request(product.getId())).orderNo();
+        Long momId = data.adminUser("媽媽").getId();
+        Long dadId = data.adminUser("爸爸").getId();
+
+        List<Callable<Void>> tasks = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            boolean confirm = i % 2 == 0;
+            tasks.add(() -> {
+                if (confirm) {
+                    adminOrderService.confirm(orderNo, 0, momId, null);
+                } else {
+                    adminOrderService.cancel(orderNo, 0, dadId, null);
+                }
+                return null;
+            });
+        }
+        Result result = runConcurrently(tasks);
+
+        assertThat(result.succeeded).isEqualTo(1);
+        String finalStatus = jdbc.queryForObject("SELECT status FROM orders WHERE order_no = ?", String.class, orderNo);
+        // 庫存要和最後的狀態一致：取消成功才歸還
+        assertThat(data.stockOf(product)).isEqualTo("CANCELLED".equals(finalStatus) ? 10 : 9);
+        // 狀態紀錄只有「下單」和成功的那一筆
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM order_status_histories h JOIN orders o ON o.id = h.order_id WHERE o.order_no = ?",
+                Integer.class, orderNo)).isEqualTo(2);
     }
 
     // ===== helpers =====

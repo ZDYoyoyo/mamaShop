@@ -4,11 +4,13 @@ import com.mamashop.order.entity.Order;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 /** 訂單明細（OrderItem）透過 Order 的 cascade 一起存，所以不另外建 Repository。 */
-public interface OrderRepository extends JpaRepository<Order, Long> {
+public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecificationExecutor<Order> {
 
     /**
      * 我的訂單（分頁）。
@@ -23,4 +25,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
      */
     @EntityGraph(attributePaths = "items")
     Optional<Order> findByOrderNoAndUserId(String orderNo, Long userId);
+
+    /** 後台：不限會員。一起載入明細與下單會員 */
+    @EntityGraph(attributePaths = {"items", "user"})
+    Optional<Order> findByOrderNo(String orderNo);
+
+    /**
+     * 後台訂單列表：一起 JOIN 下單會員（多對一，不影響分頁），顯示顧客名字時不會 N+1。
+     * 明細仍由 default_batch_fetch_size 批次載入。
+     */
+    @Override
+    @EntityGraph(attributePaths = "user")
+    Page<Order> findAll(Specification<Order> spec, Pageable pageable);
 }
