@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '@/views/HomeView.vue'
+import { authGuard } from './guards'
 
 /**
  * 路由：網址 → 頁面元件。
@@ -8,7 +9,7 @@ import HomeView from '@/views/HomeView.vue'
  * 正式環境的 Nginx 要設定「找不到檔案就回傳 index.html」（D03），否則直接打開 /products/1 會 404。
  *
  * 除了首頁，其他頁面用 () => import(...) 延遲載入：使用者進到那一頁才下載程式，首頁比較快。
- * 需要登入的路由守衛在 F04 加入。
+ * 需要登入的頁面加上 meta: { requiresAuth: true }（見 guards.js）。
  */
 export const routes = [
   {
@@ -38,6 +39,13 @@ export const routes = [
     path: '/login',
     name: 'login',
     component: () => import('@/views/LoginView.vue'),
+    meta: { guestOnly: true },
+  },
+  {
+    path: '/register',
+    name: 'register',
+    component: () => import('@/views/RegisterView.vue'),
+    meta: { guestOnly: true },
   },
   {
     // 其他所有網址
@@ -55,6 +63,9 @@ const router = createRouter({
     return savedPosition ?? { top: 0 }
   },
 })
+
+// 每次換頁之前檢查登入狀態（guards.js）
+router.beforeEach(authGuard)
 
 // 每次換頁先把標題設回網站名稱，需要的頁面（例如商品詳情）再自己改
 router.afterEach(() => {
