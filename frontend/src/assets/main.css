@@ -4,8 +4,10 @@
   --color-muted: #6b6b6b;
   --color-border: #e5e5e5;
   --color-background: #ffffff;
+  --color-surface: #faf7f4;
   --color-primary: #b5651d;
   --color-danger: #c0392b;
+
   font-family:
     -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
   line-height: 1.6;
@@ -25,4 +27,27 @@ body {
 
 a {
   color: var(--color-primary);
+}
+
+/*
+ * Element Plus 主題色：預設是藍色，改成和網站一致的棕色。
+ * light-N、dark-2 是按鈕 hover、選取背景等用到的深淺色（主題色和白／黑混合計算出來的）。
+ *
+ * 選擇器用 html:root 而不是 :root：Element Plus 的樣式是按需載入的，會比這個檔案「晚」載入，
+ * 它自己也有 :root { --el-color-primary: #409eff }，優先級相同時後載入的會蓋掉前面的。
+ * html:root 的優先級比較高，不管載入順序都不會被覆蓋。
+ */
+html:root {
+  --el-color-primary: #b5651d;
+  --el-color-primary-light-3: #cb9361;
+  --el-color-primary-light-5: #dab28e;
+  --el-color-primary-light-7: #e9d1bb;
+  --el-color-primary-light-8: #f0e0d2;
+  --el-color-primary-light-9: #f8f0e8;
+  --el-color-primary-dark-2: #915117;
+}
+
+h1,
+h2 {
+  line-height: 1.3;
 }

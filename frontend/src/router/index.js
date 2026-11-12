@@ -8,28 +8,52 @@ import HomeView from '@/views/HomeView.vue'
  * 正式環境的 Nginx 要設定「找不到檔案就回傳 index.html」（D03），否則直接打開 /products/1 會 404。
  *
  * 除了首頁，其他頁面用 () => import(...) 延遲載入：使用者進到那一頁才下載程式，首頁比較快。
- * 前台（F02～F06）、後台（A01～）的頁面之後陸續加在這裡；需要登入的路由守衛在 F04 加入。
+ * 需要登入的路由守衛在 F04 加入。
  */
+export const routes = [
+  {
+    path: '/',
+    name: 'home',
+    component: HomeView,
+  },
+  {
+    path: '/products',
+    name: 'products',
+    component: () => import('@/views/ProductListView.vue'),
+  },
+  {
+    // (\\d+)：只接受數字，/products/abc 會落到 404 頁
+    path: '/products/:id(\\d+)',
+    name: 'product-detail',
+    component: () => import('@/views/ProductDetailView.vue'),
+    // 把路由參數 id 當成元件的 props 傳入，元件不用自己讀 route.params
+    props: true,
+  },
+  {
+    path: '/login',
+    name: 'login',
+    component: () => import('@/views/LoginView.vue'),
+  },
+  {
+    // 其他所有網址
+    path: '/:pathMatch(.*)*',
+    name: 'not-found',
+    component: () => import('@/views/NotFoundView.vue'),
+  },
+]
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
-  routes: [
-    {
-      path: '/',
-      name: 'home',
-      component: HomeView,
-    },
-    {
-      path: '/login',
-      name: 'login',
-      component: () => import('@/views/LoginView.vue'),
-    },
-    {
-      // 其他所有網址
-      path: '/:pathMatch(.*)*',
-      name: 'not-found',
-      component: () => import('@/views/NotFoundView.vue'),
-    },
-  ],
+  routes,
+  // 換頁時捲到最上面；按「上一頁」時回到原本捲動的位置。同一頁只改 query（換分頁）也捲到最上面
+  scrollBehavior(to, from, savedPosition) {
+    return savedPosition ?? { top: 0 }
+  },
+})
+
+// 每次換頁先把標題設回網站名稱，需要的頁面（例如商品詳情）再自己改
+router.afterEach(() => {
+  document.title = 'mamaShop'
 })
 
 export default router
