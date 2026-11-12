@@ -30,6 +30,26 @@ describe('authGuard（路由守衛）', () => {
   it('一般頁面：都放行', () => {
     expect(authGuard({ meta: {}, fullPath: '/products' })).toBe(true)
   })
+
+  describe('後台（requiresAdmin）', () => {
+    const toAdmin = { meta: { requiresAuth: true, requiresAdmin: true }, path: '/admin', fullPath: '/admin', query: {}, hash: '' }
+
+    it('未登入：導向登入頁，登入後回到後台', () => {
+      expect(authGuard(toAdmin)).toEqual({ name: 'login', query: { redirect: '/admin' } })
+    })
+
+    it('一般會員：顯示找不到頁面，網址不變', () => {
+      useAuthStore().setSession({ accessToken: 't', user: { name: '王小明', role: 'USER' } })
+
+      expect(authGuard(toAdmin)).toMatchObject({ name: 'not-found', params: { pathMatch: ['admin'] } })
+    })
+
+    it('管理員：放行', () => {
+      useAuthStore().setSession({ accessToken: 't', user: { name: '媽媽', role: 'ADMIN' } })
+
+      expect(authGuard(toAdmin)).toBe(true)
+    })
+  })
 })
 
 describe('safeRedirect（防止 open redirect）', () => {
