@@ -77,6 +77,21 @@ export const routes = [
     meta: { guestOnly: true },
   },
   {
+    // 後台：AdminLayout 是外框，子路由顯示在它裡面的 <RouterView />。
+    // meta 會由子路由繼承（to.meta 是所有符合的路由 meta 合併），所以只要標在這裡。
+    // 後台的程式和前台分開打包：一般顧客不會下載到後台的程式。
+    path: '/admin',
+    component: () => import('@/layouts/AdminLayout.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, layout: 'admin' },
+    children: [
+      {
+        path: '',
+        name: 'admin-home',
+        component: () => import('@/views/admin/AdminHomeView.vue'),
+      },
+    ],
+  },
+  {
     // 其他所有網址
     path: '/:pathMatch(.*)*',
     name: 'not-found',

@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
  * 在路由上用 meta 標記：
  *   meta: { requiresAuth: true }   需要登入（例如結帳、我的訂單）
  *   meta: { guestOnly: true }      已登入就不用再進來（登入頁、註冊頁）
+ *   meta: { requiresAdmin: true }  只有管理員能進（後台）
  *
  * 注意：這只是「使用者體驗」——讓沒登入的人看到登入頁，而不是一個會失敗的頁面。
  * 真正的保護在後端：就算有人繞過前端，API 沒有有效 token 一樣回 401。
@@ -16,6 +17,17 @@ export function authGuard(to) {
   const auth = useAuthStore()
   if (to.meta.requiresAuth && !auth.isLoggedIn) {
     return { name: 'login', query: { redirect: to.fullPath } }
+  }
+  if (to.meta.requiresAdmin && !auth.isAdmin) {
+    // 已登入但不是管理員：顯示「找不到頁面」（網址不變），不讓顧客知道這裡有後台。
+    // 這是 vue-router 文件建議的寫法：導向 not-found 路由，但保留原本的路徑
+    return {
+      name: 'not-found',
+      params: { pathMatch: to.path.substring(1).split('/') },
+      query: to.query,
+      hash: to.hash,
+      replace: true,
+    }
   }
   if (to.meta.guestOnly && auth.isLoggedIn) {
     return { name: 'home' }

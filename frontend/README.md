@@ -20,7 +20,8 @@ src/
 ├── App.vue           # 外框（header）＋ <RouterView>
 ├── router/
 │   ├── index.js      # 網址 → 頁面
-│   └── guards.js     # 路由守衛：需要登入的頁面、登入後跳轉
+│   ├── guards.js     # 路由守衛：需要登入／管理員的頁面、登入後跳轉
+│   └── chunkError.js # 頁面程式下載失敗時重新整理或顯示錯誤
 ├── api/
 │   ├── http.js       # axios 實例：自動帶 token、統一錯誤格式、401 導向登入頁
 │   ├── catalog.js    # 商品、分類 API
@@ -29,7 +30,8 @@ src/
 ├── stores/
 │   ├── auth.js       # 登入狀態（token、會員資料，存在 localStorage）
 │   └── cart.js       # 購物車（存在 localStorage）
-├── views/            # 頁面（一個網址對應一個）
+├── layouts/          # 版面：StoreLayout（前台 header）、AdminLayout（後台選單）
+├── views/            # 頁面（一個網址對應一個）；views/admin/ 是後台頁面
 ├── components/       # 可重複使用的元件（ProductCard、ProductGrid…）
 ├── utils/
 │   ├── format.js     # 金額、庫存顯示
