@@ -197,3 +197,23 @@ PR #1–#9 已 merge，但你還沒看過。B 系列完成後一起研究。建�
 - 🔲 **退回的訂單付款狀態維持「未付款」**；接金流（P01）後，已付款的訂單取消／退回要處理退款（`REFUNDED`）
 - 🔲 **出貨後填錯物流單號無法修改**（只能在出貨時填一次）
 - 🔲 **送達／完成需要家人手動按**：超商取貨沒有串接物流狀態（P03 才自動）
+
+## B11 測試
+
+全部 **255 個測試**（`mvnw test`）。測試的分層：
+
+| 類型 | 啟動什麼 | 例子 | 用途 |
+|---|---|---|---|
+| 純單元測試 | 什麼都不啟動（Mockito） | `OrderServiceTest`、`AdminOrderServiceTest`、`OrderStatusTest`、`ImageTypeTest` | Service 邏輯、狀態機；毫秒級 |
+| Web 層切片 | 只有 Controller（`@WebMvcTest`） | `OrderControllerParamTest`、`ProductControllerTest` | 參數驗證、預設值、從 token 取 id |
+| 整合測試 | 完整應用＋真的資料庫 | `CreateOrderIntegrationTest`、`AdminOrderIntegrationTest` | SQL、交易回滾、資料庫限制 |
+| 併發測試 | 完整應用＋多執行緒 | `OrderConcurrencyTest` | 超賣、死結、樂觀鎖 |
+| 權限總表 | 完整應用 | `AccessControlTest` | 32 支 API × 3 種身分 |
+
+- ℹ️ **權限總表 `AccessControlTest`**：列出每支 API 是「公開／登入／管理員」，用未登入、顧客、管理員三種身分逐一驗證。另外會掃描所有已註冊的 API，**新增 API 沒加進總表，測試就會失敗**。之後每加一支 API 都要更新這張表
+- ℹ️ **反向驗證**：把 `/api/admin/**` 暫時改成「登入即可」→ 21 個失敗；總表漏列一支 API → 完整性檢查失敗並列出漏掉的那支
+- ℹ️ **修正了 B06 的偶發失敗測試**：竄改 JWT 的測試原本是換掉簽章最後一個字元，但那個字元有 4 個 bit 是 Base64 補位，`A` → `B` 只改到補位，簽章其實沒變，約 1/64 的機率測試失敗。改成竄改簽章中間的字元，並新增「把 payload 的會員 id 改成別人」的偽造測試
+- ℹ️ 併發測試在 B08–B10 已經做了（庫存搶購、死結、重複取消、管理員同時操作）
+- ℹ️ Controller 參數測試只關掉 Security filter，直接設定 `SecurityContextHolder` 模擬登入者
+- 🔲 **CI（D06）**：整合測試需要 PostgreSQL；GitHub Actions 要加 `services: postgres`，或改用 Testcontainers
+- 🔲 **沒有測試覆蓋率報告**（JaCoCo）；需要的話 D06 時一起加
