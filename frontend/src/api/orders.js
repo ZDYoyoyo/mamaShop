@@ -17,3 +17,13 @@ export function createOrder(payload) {
 export function getOrder(orderNo) {
   return http.get(`/orders/${encodeURIComponent(orderNo)}`)
 }
+
+/** 我的訂單（新到舊）：{ items, page, size, totalElements, totalPages } */
+export function listMyOrders({ page = 1, size = 10 } = {}) {
+  return http.get('/orders', { params: { page, size } })
+}
+
+/** 取消訂單（只有待確認時可以），回傳更新後的訂單 */
+export function cancelOrder(orderNo) {
+  return http.post(`/orders/${encodeURIComponent(orderNo)}/cancel`)
+}

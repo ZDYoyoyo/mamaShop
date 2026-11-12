@@ -25,7 +25,7 @@ src/
 │   ├── http.js       # axios 實例：自動帶 token、統一錯誤格式、401 導向登入頁
 │   ├── catalog.js    # 商品、分類 API
 │   ├── auth.js       # 註冊、登入 API
-│   └── orders.js     # 建立訂單、查詢訂單 API
+│   └── orders.js     # 建立、查詢、列出、取消訂單 API
 ├── stores/
 │   ├── auth.js       # 登入狀態（token、會員資料，存在 localStorage）
 │   └── cart.js       # 購物車（存在 localStorage）
