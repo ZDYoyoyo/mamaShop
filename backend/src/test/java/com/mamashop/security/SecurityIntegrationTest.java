@@ -139,15 +139,33 @@ class SecurityIntegrationTest {
     }
 
     @Test
-    void me_withTamperedToken_returns401() throws Exception {
-        User user = createUser("buyer@example.com", Role.USER, true);
+    void me_withTamperedSignature_returns401() throws Exception {
+        createUser("buyer@example.com", Role.USER, true);
         String token = loginAndGetToken("buyer@example.com", PASSWORD);
-        // 把簽章最後一個字元換掉
-        String tampered = token.substring(0, token.length() - 1) + (token.endsWith("A") ? "B" : "A");
+        // 換掉簽章「中間」的一個字元。
+        // 注意：不能換最後一個字元——HS512 簽章 64 bytes 編成 86 個 Base64 字元，
+        // 最後一個字元有 4 個 bit 是補位，A 換成 B 只改到補位，解碼後簽章完全相同（B11 時發現的偶發失敗）
+        int signatureStart = token.lastIndexOf('.') + 1;
+        int middle = signatureStart + (token.length() - signatureStart) / 2;
+        char replacement = token.charAt(middle) == 'A' ? 'B' : 'A';
+        String tampered = token.substring(0, middle) + replacement + token.substring(middle + 1);
 
         mockMvc.perform(get("/api/users/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + tampered))
                 .andExpect(status().isUnauthorized());
-        assertThat(user.getId()).isNotNull();
+    }
+
+    @Test
+    void me_withTamperedPayload_returns401() throws Exception {
+        // 把 payload 的會員 id 改成別人（攻擊者最想做的事），簽章對不上就應該被拒絕
+        User victim = createUser("victim@example.com", Role.ADMIN, true);
+        createUser("buyer@example.com", Role.USER, true);
+        String[] parts = loginAndGetToken("buyer@example.com", PASSWORD).split("\\.");
+        String forgedPayload = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(
+                ("{\"sub\":\"" + victim.getId() + "\",\"exp\":4102444800}").getBytes(StandardCharsets.UTF_8));
+        String forged = parts[0] + "." + forgedPayload + "." + parts[2];
+
+        mockMvc.perform(get("/api/users/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + forged))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
