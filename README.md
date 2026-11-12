@@ -65,3 +65,15 @@ docker compose up --build     # 建置後端映像檔並啟動資料庫＋後端
 3. 標有鎖頭的 API 就會自動帶上 token，可以直接按 Try it out 測試
 
 正式環境不要開啟（API 文件會列出所有後台 API）。
+
+### 前端
+
+需要 Node.js 22 以上。後端要先啟動（上面任一種方式）。
+
+```bash
+cd frontend
+npm ci          # 第一次或依賴變更後
+npm run dev     # http://localhost:5173
+```
+
+詳見 [`frontend/README.md`](frontend/README.md)。
