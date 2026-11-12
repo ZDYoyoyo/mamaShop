@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatPrice, stockLabel } from '@/utils/format'
+import { formatDateTime, formatPrice, stockLabel } from '@/utils/format'
 
 describe('formatPrice', () => {
   it('整數不顯示小數，千分位加逗號', () => {
@@ -30,5 +30,21 @@ describe('stockLabel', () => {
 
   it('庫存充足時不顯示', () => {
     expect(stockLabel(6)).toBeNull()
+  })
+})
+
+describe('formatDateTime', () => {
+  it('UTC 時間轉成台灣時間顯示', () => {
+    // UTC 2026-11-11 17:05 = 台灣 2026-11-12 01:05
+    expect(formatDateTime('2026-11-11T17:05:00Z')).toBe('2026/11/12 01:05')
+  })
+
+  it('午夜顯示成 00 點，不是 24 點', () => {
+    // UTC 16:30 = 台灣 00:30
+    expect(formatDateTime('2026-11-11T16:30:00Z')).toBe('2026/11/12 00:30')
+  })
+
+  it('沒有值時回傳空字串', () => {
+    expect(formatDateTime(null)).toBe('')
   })
 })

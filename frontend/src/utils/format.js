@@ -32,3 +32,29 @@ export function stockLabel(stock) {
   }
   return null
 }
+
+const dateTimeFormatter = new Intl.DateTimeFormat('zh-TW', {
+  timeZone: 'Asia/Taipei',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  // h23：00～23 點。用 hour12: false 時，部分瀏覽器會把午夜顯示成 24:05
+  hourCycle: 'h23',
+})
+
+/**
+ * 時間顯示：後端回傳 ISO 格式的 UTC 時間（Instant），轉成台灣時間 "2026/11/12 14:05"。
+ * 固定用台灣時區，不管顧客的電腦設定在哪個時區。
+ *
+ * 用 formatToParts 取出年月日時分再自己組字串：直接 format() 時，日期和時間中間的空白
+ * 會因瀏覽器版本不同而是一般空白或「窄空白」（U+2009），結果不一致。
+ */
+export function formatDateTime(value) {
+  if (!value) return ''
+  const parts = Object.fromEntries(
+    dateTimeFormatter.formatToParts(new Date(value)).map((part) => [part.type, part.value]),
+  )
+  return `${parts.year}/${parts.month}/${parts.day} ${parts.hour}:${parts.minute}`
+}

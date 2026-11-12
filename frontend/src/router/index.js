@@ -49,6 +49,19 @@ export const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/orders',
+    name: 'orders',
+    component: () => import('@/views/OrdersView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/orders/:orderNo',
+    name: 'order-detail',
+    component: () => import('@/views/OrderDetailView.vue'),
+    props: true,
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('@/views/LoginView.vue'),

@@ -60,6 +60,9 @@ onMounted(async () => {
     </section>
 
     <div class="actions">
+      <RouterLink :to="{ name: 'order-detail', params: { orderNo: order.orderNo } }">
+        <el-button type="primary">查看訂單</el-button>
+      </RouterLink>
       <RouterLink :to="{ name: 'products' }"><el-button>繼續購物</el-button></RouterLink>
     </div>
   </template>
@@ -116,6 +119,8 @@ p {
 }
 
 .actions {
-  text-align: center;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
 }
 </style>

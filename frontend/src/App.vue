@@ -39,7 +39,8 @@ function logout() {
           </span>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item @click="logout">登出</el-dropdown-item>
+              <el-dropdown-item @click="router.push({ name: 'orders' })">我的訂單</el-dropdown-item>
+              <el-dropdown-item divided @click="logout">登出</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
