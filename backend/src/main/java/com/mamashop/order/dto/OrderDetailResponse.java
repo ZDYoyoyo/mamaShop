@@ -40,7 +40,8 @@ public record OrderDetailResponse(
         Instant deliveredAt,
         Instant completedAt,
         Instant cancelledAt,
-        Instant returnedAt) {
+        Instant returnedAt,
+        Instant paidAt) {
 
     public static OrderDetailResponse from(Order order) {
         return new OrderDetailResponse(
@@ -67,7 +68,8 @@ public record OrderDetailResponse(
                 order.getDeliveredAt(),
                 order.getCompletedAt(),
                 order.getCancelledAt(),
-                order.getReturnedAt());
+                order.getReturnedAt(),
+                order.getPaidAt());
     }
 
     /** 明細：名稱、單價是下單當下的快照 */
