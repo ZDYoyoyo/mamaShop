@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+import * as authApi from '@/api/auth'
 
 const TOKEN_KEY = 'mamashop.token'
 const USER_KEY = 'mamashop.user'
@@ -37,7 +38,29 @@ export const useAuthStore = defineStore('auth', () => {
     remove(USER_KEY)
   }
 
-  return { token, user, isLoggedIn, isAdmin, setSession, logout }
+  /** 登入：成功就記下 token 與會員資料；失敗會丟出 ApiError（例如 INVALID_CREDENTIALS） */
+  async function login(credentials) {
+    setSession(await authApi.login(credentials))
+  }
+
+  /**
+   * 開啟網站時呼叫：確認 localStorage 裡的 token 還有效，並更新會員資料（例如名字改過）。
+   * token 已失效（過期、帳號停用、密碼被重設）就安靜地登出，不跳轉頁面——
+   * 顧客可能只是來逛商品，不需要被帶去登入頁。
+   */
+  async function loadProfile() {
+    if (!token.value) return
+    try {
+      const profile = await authApi.getMe({ skipAuthRedirect: true })
+      user.value = profile
+      write(USER_KEY, JSON.stringify(profile))
+    } catch (e) {
+      if (e.status === 401) logout()
+      // 其他錯誤（網路問題）保留登入狀態，下次再確認
+    }
+  }
+
+  return { token, user, isLoggedIn, isAdmin, setSession, logout, login, loadProfile }
 })
 
 // localStorage 在無痕模式或被瀏覽器封鎖時可能丟出例外，包起來避免整個網站壞掉
