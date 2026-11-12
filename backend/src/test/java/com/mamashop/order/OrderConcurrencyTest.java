@@ -25,6 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -96,6 +97,29 @@ class OrderConcurrencyTest {
         assertThat(result.succeeded).isEqualTo(40);
         assertThat(data.stockOf(x)).isEqualTo(960);
         assertThat(data.stockOf(y)).isEqualTo(960);
+    }
+
+    @Test
+    void sameOrderCancelledConcurrently_stockRestoredExactlyOnce() throws Exception {
+        // 顧客在兩個分頁同時按「取消」（或網路重送），庫存只能歸還一次
+        Product product = data.product("帆布包", "500.00", 10, ProductStatus.ON_SALE);
+        String orderNo = orderService.createOrder(data.user().getId(), request(product.getId())).orderNo();
+        assertThat(data.stockOf(product)).isEqualTo(9);
+
+        List<Callable<Void>> tasks = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            tasks.add(() -> {
+                orderService.cancelMyOrder(data.user().getId(), orderNo);
+                return null;
+            });
+        }
+        Result result = runConcurrently(tasks);
+
+        assertThat(result.succeeded).isEqualTo(1);
+        // 其他 9 個：有的讀到「已取消」被拒絕，有的和成功那筆同時讀到「待確認」，被樂觀鎖擋下
+        assertThat(result.unexpected).allSatisfy(e -> assertThat(e).isInstanceOfAny(
+                BusinessException.class, OptimisticLockingFailureException.class));
+        assertThat(data.stockOf(product)).isEqualTo(10);
     }
 
     // ===== helpers =====

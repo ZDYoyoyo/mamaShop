@@ -78,4 +78,13 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
             """)
     int decreaseStock(@Param("id") Long id, @Param("quantity") int quantity,
                       @Param("status") ProductStatus status, @Param("now") Instant now);
+
+    /**
+     * 取消訂單時歸還庫存（B09／B10）。
+     * 不限制商品狀態：商品下架了，庫存還是要加回去。
+     * 同樣用一條 UPDATE 在資料庫裡加，不會覆蓋同時間其他訂單扣掉的數量。
+     */
+    @Modifying
+    @Query("UPDATE Product p SET p.stock = p.stock + :quantity, p.updatedAt = :now WHERE p.id = :id")
+    int increaseStock(@Param("id") Long id, @Param("quantity") int quantity, @Param("now") Instant now);
 }

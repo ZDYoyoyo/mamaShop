@@ -33,7 +33,14 @@ public record OrderDetailResponse(
         BigDecimal shippingFee,
         BigDecimal totalAmount,
         List<ItemResponse> items,
-        Instant createdAt) {
+        Instant createdAt,
+        // 各狀態的時間：前端可以畫出「下單 → 確認 → 出貨 → 送達 → 完成」的進度
+        Instant confirmedAt,
+        Instant shippedAt,
+        Instant deliveredAt,
+        Instant completedAt,
+        Instant cancelledAt,
+        Instant returnedAt) {
 
     public static OrderDetailResponse from(Order order) {
         return new OrderDetailResponse(
@@ -54,7 +61,13 @@ public record OrderDetailResponse(
                 order.getShippingFee(),
                 order.getTotalAmount(),
                 order.getItems().stream().map(ItemResponse::from).toList(),
-                order.getCreatedAt());
+                order.getCreatedAt(),
+                order.getConfirmedAt(),
+                order.getShippedAt(),
+                order.getDeliveredAt(),
+                order.getCompletedAt(),
+                order.getCancelledAt(),
+                order.getReturnedAt());
     }
 
     /** 明細：名稱、單價是下單當下的快照 */

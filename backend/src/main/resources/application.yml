@@ -32,6 +32,11 @@ spring:
       ddl-auto: validate
     # 關閉 Open Session In View：不讓資料庫連線一路開到 Controller 回應結束
     open-in-view: false
+    properties:
+      hibernate:
+        # 載入 LAZY 關聯時，一次用 WHERE id IN (...) 撈回最多 50 筆，而不是一筆一筆查（避免 N+1）。
+        # 例如訂單列表一頁 10 筆，明細只會多 1 個查詢，而不是 10 個
+        default_batch_fetch_size: 50
 
 # ===== 本專案自訂設定（對應 com.mamashop.security / user 套件裡的 *Properties 類別）=====
 app:

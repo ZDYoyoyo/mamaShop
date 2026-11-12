@@ -41,7 +41,9 @@ public enum ErrorCode {
     PRODUCT_UNAVAILABLE(HttpStatus.CONFLICT, "商品已下架或不存在"),
     INSUFFICIENT_STOCK(HttpStatus.CONFLICT, "商品庫存不足"),
     SHIPPING_METHOD_UNAVAILABLE(HttpStatus.CONFLICT, "此運送方式目前無法使用"),
-    ORDER_AMOUNT_TOO_LARGE(HttpStatus.BAD_REQUEST, "訂單金額超過上限");
+    ORDER_AMOUNT_TOO_LARGE(HttpStatus.BAD_REQUEST, "訂單金額超過上限"),
+    INVALID_ORDER_STATUS(HttpStatus.CONFLICT, "訂單目前的狀態不允許此操作"),
+    ORDER_CANNOT_CANCEL(HttpStatus.CONFLICT, "訂單已確認，無法自行取消，請聯絡賣家");
 
     private final HttpStatus status;
     private final String defaultMessage;

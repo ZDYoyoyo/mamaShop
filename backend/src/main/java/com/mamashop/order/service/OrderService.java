@@ -2,8 +2,11 @@ package com.mamashop.order.service;
 
 import com.mamashop.common.exception.BusinessException;
 import com.mamashop.common.exception.ErrorCode;
+import com.mamashop.common.exception.NotFoundException;
+import com.mamashop.common.response.PageResponse;
 import com.mamashop.order.dto.CreateOrderRequest;
 import com.mamashop.order.dto.OrderDetailResponse;
+import com.mamashop.order.dto.OrderSummaryResponse;
 import com.mamashop.order.entity.Order;
 import com.mamashop.order.entity.OrderItem;
 import com.mamashop.order.entity.OrderStatus;
@@ -13,7 +16,6 @@ import com.mamashop.order.entity.PaymentStatus;
 import com.mamashop.order.repository.OrderRepository;
 import com.mamashop.order.repository.OrderStatusHistoryRepository;
 import com.mamashop.product.entity.Product;
-import com.mamashop.product.entity.ProductStatus;
 import com.mamashop.product.repository.ProductRepository;
 import com.mamashop.shipping.entity.ShippingMethod;
 import com.mamashop.shipping.entity.ShippingMethodCode;
@@ -27,6 +29,8 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +45,9 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>讀取商品（此時這些列已被本交易鎖住），把名稱、單價快照到訂單明細</li>
  *   <li>計算金額、產生訂單編號、寫入訂單與第一筆狀態紀錄</li>
  * </ol>
+ *
+ * <h2>權限</h2>
+ * 所有方法都帶 userId（來自 JWT），查詢條件一定包含 userId：顧客只能看到、取消自己的訂單。
  */
 @Service
 public class OrderService {
@@ -49,6 +56,7 @@ public class OrderService {
     private static final int MAX_QUANTITY_PER_PRODUCT = 99;
     /** orders.total_amount 是 NUMERIC(10,2)，超過會在寫入時出錯，先擋下 */
     private static final BigDecimal MAX_ORDER_AMOUNT = new BigDecimal("99999999.99");
+    private static final Sort NEWEST_FIRST = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
 
     private final ProductRepository productRepository;
     private final ShippingMethodRepository shippingMethodRepository;
@@ -56,19 +64,22 @@ public class OrderService {
     private final OrderStatusHistoryRepository historyRepository;
     private final UserRepository userRepository;
     private final OrderNumberGenerator orderNumberGenerator;
+    private final OrderStockService orderStockService;
 
     public OrderService(ProductRepository productRepository,
                         ShippingMethodRepository shippingMethodRepository,
                         OrderRepository orderRepository,
                         OrderStatusHistoryRepository historyRepository,
                         UserRepository userRepository,
-                        OrderNumberGenerator orderNumberGenerator) {
+                        OrderNumberGenerator orderNumberGenerator,
+                        OrderStockService orderStockService) {
         this.productRepository = productRepository;
         this.shippingMethodRepository = shippingMethodRepository;
         this.orderRepository = orderRepository;
         this.historyRepository = historyRepository;
         this.userRepository = userRepository;
         this.orderNumberGenerator = orderNumberGenerator;
+        this.orderStockService = orderStockService;
     }
 
     /**
@@ -81,7 +92,7 @@ public class OrderService {
      */
     @Transactional
     public OrderDetailResponse createOrder(Long userId, CreateOrderRequest request) {
-        // 1. 合併重複商品並依 id 排序（TreeMap 會自動排序，排序的原因見 deductStock）
+        // 1. 合併重複商品並依 id 排序（TreeMap 會自動排序，排序的原因見 OrderStockService.deduct）
         SortedMap<Long, Integer> quantities = mergeQuantities(request);
 
         // 2. 運送方式與運費（停用中的不能用）
@@ -90,7 +101,7 @@ public class OrderService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.SHIPPING_METHOD_UNAVAILABLE));
 
         // 3. 扣庫存（任何一個失敗 → 例外 → 整筆回滾）
-        deductStock(quantities);
+        orderStockService.deduct(quantities);
 
         // 4. 讀取商品做快照。扣庫存的 UPDATE 已經鎖住這些列，交易結束前別人改不了價格或狀態，
         //    所以這裡讀到的價格，就是和扣庫存同一個時間點的價格
@@ -144,6 +155,57 @@ public class OrderService {
         return OrderDetailResponse.from(order);
     }
 
+    // ===== B09：我的訂單 =====
+
+    /** 我的訂單（新到舊） */
+    @Transactional(readOnly = true)
+    public PageResponse<OrderSummaryResponse> listMyOrders(Long userId, int page, int size) {
+        return PageResponse.of(
+                orderRepository.findByUserId(userId, PageRequest.of(page - 1, size, NEWEST_FIRST)),
+                OrderSummaryResponse::from);
+    }
+
+    /** 訂單詳情；別人的訂單和不存在的訂單一律回 404（不透露訂單是否存在） */
+    @Transactional(readOnly = true)
+    public OrderDetailResponse getMyOrder(Long userId, String orderNo) {
+        return OrderDetailResponse.from(findMyOrder(userId, orderNo));
+    }
+
+    /**
+     * 顧客取消訂單：只有家人還沒確認前（待確認／待付款）可以取消，取消後歸還庫存。
+     *
+     * <p>和家人同時操作的情況（顧客按取消的同一瞬間，家人按了確認）：
+     * 兩邊都讀到「待確認」，但 orders 有 @Version 樂觀鎖，
+     * 後送出的 UPDATE 會因為版本號不符而失敗（409「資料已被其他人修改」），整筆回滾，
+     * 所以不會出現「已確認卻被取消」或「庫存被歸還兩次」。
+     */
+    @Transactional
+    public OrderDetailResponse cancelMyOrder(Long userId, String orderNo) {
+        Order order = findMyOrder(userId, orderNo);
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS, "訂單已經取消");
+        }
+        if (!order.getStatus().isCancellableByCustomer()) {
+            throw new BusinessException(ErrorCode.ORDER_CANNOT_CANCEL);
+        }
+
+        OrderStatus from = order.transitionTo(OrderStatus.CANCELLED, Instant.now());
+        // 先 flush：立刻送出 UPDATE orders ... WHERE version = ?。
+        // 版本衝突的話在這裡就失敗，還沒動到庫存（就算動了也會一起回滾，但先失敗比較省事）
+        orderRepository.saveAndFlush(order);
+
+        orderStockService.restore(order);
+        historyRepository.save(new OrderStatusHistory(
+                order, from, OrderStatus.CANCELLED, userRepository.getReferenceById(userId), "顧客取消"));
+
+        return OrderDetailResponse.from(order);
+    }
+
+    private Order findMyOrder(Long userId, String orderNo) {
+        return orderRepository.findByOrderNoAndUserId(orderNo, userId)
+                .orElseThrow(() -> new NotFoundException("找不到訂單"));
+    }
+
     /**
      * 同一個商品在購物車出現兩次（例如前端 bug），合併成一筆。
      * order_items 有 UNIQUE (order_id, product_id)，不合併的話寫入時會失敗。
@@ -160,34 +222,6 @@ public class OrderService {
             }
         });
         return quantities;
-    }
-
-    /**
-     * 依商品 id「由小到大」逐一扣庫存。
-     *
-     * <p>為什麼要排序：避免死結（deadlock）。
-     * 假設訂單 A 買「商品1、商品2」，訂單 B 買「商品2、商品1」，兩者同時執行：
-     * A 鎖住商品1、B 鎖住商品2，接著 A 等商品2、B 等商品1 → 互相等待，永遠卡住
-     * （PostgreSQL 偵測到後會讓其中一筆失敗）。
-     * 大家都照同樣順序上鎖，就不可能形成這種循環等待。
-     */
-    private void deductStock(SortedMap<Long, Integer> quantities) {
-        Instant now = Instant.now();
-        quantities.forEach((productId, quantity) -> {
-            int updated = productRepository.decreaseStock(productId, quantity, ProductStatus.ON_SALE, now);
-            if (updated == 0) {
-                throw stockFailure(productId);
-            }
-        });
-    }
-
-    /** 扣庫存失敗時，查出原因給使用者清楚的訊息 */
-    private BusinessException stockFailure(Long productId) {
-        return productRepository.findById(productId)
-                .filter(p -> p.getStatus() == ProductStatus.ON_SALE)
-                .map(p -> new BusinessException(ErrorCode.INSUFFICIENT_STOCK,
-                        "「" + p.getName() + "」庫存不足，目前剩 " + p.getStock() + " 件"))
-                .orElseGet(() -> new BusinessException(ErrorCode.PRODUCT_UNAVAILABLE));
     }
 
     /** 依運送方式只保留對應的欄位（宅配不存門市、超商不存地址） */
