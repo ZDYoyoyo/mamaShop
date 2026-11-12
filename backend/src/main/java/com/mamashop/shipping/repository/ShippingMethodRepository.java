@@ -1,7 +1,9 @@
 package com.mamashop.shipping.repository;
 
 import com.mamashop.shipping.entity.ShippingMethod;
+import com.mamashop.shipping.entity.ShippingMethodCode;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ShippingMethodRepository extends JpaRepository<ShippingMethod, Long> {
@@ -13,4 +15,6 @@ public interface ShippingMethodRepository extends JpaRepository<ShippingMethod, 
     List<ShippingMethod> findAllByOrderBySortOrderAscIdAsc();
 
     long countByEnabledTrue();
+
+    Optional<ShippingMethod> findByCode(ShippingMethodCode code);
 }
