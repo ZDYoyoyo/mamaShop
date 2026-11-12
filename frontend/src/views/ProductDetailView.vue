@@ -1,11 +1,13 @@
 <script setup>
 /**
- * 商品詳情：圖片、名稱、價格、庫存、描述。
- * 「加入購物車」在 F03 加入。
+ * 商品詳情：圖片、名稱、價格、庫存、描述、加入購物車。
  */
 import { computed, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
+import 'element-plus/es/components/message/style/css'
 import { getProduct } from '@/api/catalog'
 import ProductImage from '@/components/ProductImage.vue'
+import { MAX_QUANTITY_PER_PRODUCT, useCartStore } from '@/stores/cart'
 import { formatPrice, stockLabel } from '@/utils/format'
 
 const props = defineProps({
@@ -20,6 +22,21 @@ const errorMessage = ref('')
 
 const stock = computed(() => (product.value ? stockLabel(product.value.stock) : null))
 
+const cart = useCartStore()
+const quantity = ref(1)
+const maxQuantity = computed(() => Math.min(product.value?.stock ?? 1, MAX_QUANTITY_PER_PRODUCT))
+
+function addToCart() {
+  const before = cart.items.find((item) => item.productId === product.value.id)?.quantity ?? 0
+  const after = cart.addItem(product.value, quantity.value)
+  if (after - before < quantity.value) {
+    // 購物車裡原本就有，加上去超過庫存：只加到庫存上限
+    ElMessage.warning(`庫存只剩 ${product.value.stock} 件，購物車已有 ${after} 件`)
+  } else {
+    ElMessage.success(`已加入購物車（共 ${after} 件）`)
+  }
+}
+
 // 從一個商品直接連到另一個商品時（路由一樣、只有 id 變），元件不會重建，所以要監聽 id
 watch(
   () => props.id,
@@ -27,6 +44,7 @@ watch(
     loading.value = true
     notFound.value = false
     errorMessage.value = ''
+    quantity.value = 1
     try {
       product.value = await getProduct(id)
       document.title = `${product.value.name} | mamaShop`
@@ -66,6 +84,12 @@ watch(
         <span class="price">{{ formatPrice(product.price) }}</span>
         <el-tag v-if="stock" :type="stock.type" effect="plain" disable-transitions>{{ stock.text }}</el-tag>
       </div>
+
+      <div v-if="product.stock > 0" class="buy">
+        <el-input-number v-model="quantity" :min="1" :max="maxQuantity" aria-label="數量" />
+        <el-button type="primary" size="large" @click="addToCart">加入購物車</el-button>
+      </div>
+      <el-button v-else size="large" disabled class="buy">已售完</el-button>
 
       <!--
         描述用 white-space: pre-wrap 保留換行，而不是 v-html：
@@ -111,6 +135,17 @@ h1 {
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--color-primary);
+}
+
+.buy {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.buy :deep(.el-button) {
+  flex: 1;
 }
 
 .description {

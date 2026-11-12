@@ -1,9 +1,12 @@
 <script setup>
 import { RouterLink, RouterView } from 'vue-router'
 import zhTw from 'element-plus/es/locale/lang/zh-tw'
+import { ShoppingCart } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
+import { useCartStore } from '@/stores/cart'
 
 const auth = useAuthStore()
+const cart = useCartStore()
 </script>
 
 <template>
@@ -15,6 +18,12 @@ const auth = useAuthStore()
         <RouterLink :to="{ name: 'products' }">商品</RouterLink>
         <span v-if="auth.isLoggedIn">{{ auth.user?.name }}</span>
         <RouterLink v-else :to="{ name: 'login' }">登入</RouterLink>
+        <!-- 購物車圖示：右上角的數字是總件數（Pinia store 改變時自動更新） -->
+        <RouterLink :to="{ name: 'cart' }" class="cart-link" :aria-label="`購物車，共 ${cart.totalQuantity} 件`">
+          <el-badge :value="cart.totalQuantity" :hidden="cart.totalQuantity === 0" :max="99">
+            <el-icon :size="22"><ShoppingCart /></el-icon>
+          </el-badge>
+        </RouterLink>
       </nav>
     </header>
 
@@ -54,6 +63,11 @@ const auth = useAuthStore()
 .nav a {
   color: var(--color-text);
   text-decoration: none;
+}
+
+.cart-link {
+  display: flex;
+  align-items: center;
 }
 
 .nav a.router-link-active {
