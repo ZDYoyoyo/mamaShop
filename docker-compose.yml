@@ -1,7 +1,7 @@
 # 本機開發用。正式環境的設定放在 deploy/（D03）。
 #
-# 只啟動資料庫（後端用 mvnw spring-boot:run 在本機跑，改程式比較方便）：
-#   docker compose up -d db
+# 只啟動資料庫與 Redis（後端用 mvnw spring-boot:run 在本機跑，改程式比較方便）：
+#   docker compose up -d db redis
 # 啟動整套服務（資料庫＋後端，都在容器裡）：
 #   docker compose up --build
 #
@@ -28,6 +28,21 @@ services:
       timeout: 3s
       retries: 10
 
+  # 商品快取（R01）。資料只是快取，重開就清空也沒關係，所以不存到硬碟
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    # --save "" --appendonly no：不寫硬碟。maxmemory＋allkeys-lru：最多用 64MB，滿了丟掉最久沒用的
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      # 只綁定本機（同資料庫）。本機用 mvnw spring-boot:run 跑後端時連 localhost:6379
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
     build: ./backend
     restart: unless-stopped
@@ -49,6 +64,7 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       APP_PROFILE: ${APP_PROFILE:-}
+      REDIS_HOST: redis
     ports:
       - "127.0.0.1:8080:8080"
     volumes:

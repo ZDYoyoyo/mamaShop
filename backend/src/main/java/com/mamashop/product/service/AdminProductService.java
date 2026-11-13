@@ -11,6 +11,7 @@ import com.mamashop.common.exception.ErrorCode;
 import com.mamashop.common.exception.NotFoundException;
 import com.mamashop.common.response.PageResponse;
 import com.mamashop.common.storage.ImageStorageService;
+import com.mamashop.product.cache.ProductCacheEvictor;
 import com.mamashop.product.dto.AdminProductResponse;
 import com.mamashop.product.dto.ProductCreateRequest;
 import com.mamashop.product.dto.ProductUpdateRequest;
@@ -38,12 +39,14 @@ public class AdminProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final ImageStorageService imageStorageService;
+    private final ProductCacheEvictor productCacheEvictor;
 
     public AdminProductService(ProductRepository productRepository, CategoryRepository categoryRepository,
-                               ImageStorageService imageStorageService) {
+                               ImageStorageService imageStorageService, ProductCacheEvictor productCacheEvictor) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.imageStorageService = imageStorageService;
+        this.productCacheEvictor = productCacheEvictor;
     }
 
     @Transactional(readOnly = true)
@@ -78,7 +81,10 @@ public class AdminProductService {
         product.setPrice(request.price());
         product.setStock(request.stock());
         product.setStatus(request.status() == null ? ProductStatus.OFF_SALE : request.status());
-        return AdminProductResponse.from(productRepository.saveAndFlush(product));
+        Product saved = productRepository.saveAndFlush(product);
+        // 新增時直接上架的話，前台列表要出現它（下架的新商品清了也無妨）
+        productCacheEvictor.evictProduct(saved.getId());
+        return AdminProductResponse.from(saved);
     }
 
     @Transactional
@@ -89,6 +95,7 @@ public class AdminProductService {
         product.setDescription(request.description());
         product.setPrice(request.price());
         // 改價格不影響已成立的訂單：訂單明細存的是下單當下的價格快照
+        productCacheEvictor.evictProduct(id);
         return AdminProductResponse.from(productRepository.saveAndFlush(product));
     }
 
@@ -96,6 +103,7 @@ public class AdminProductService {
     public AdminProductResponse changeStatus(Long id, ProductStatus status) {
         Product product = findOrThrow(id);
         product.setStatus(status);
+        productCacheEvictor.evictProduct(id);
         return AdminProductResponse.from(productRepository.saveAndFlush(product));
     }
 
@@ -107,6 +115,7 @@ public class AdminProductService {
             findOrThrow(id);
             throw new BusinessException(ErrorCode.STOCK_ADJUSTMENT_INVALID);
         }
+        productCacheEvictor.evictProduct(id);
         // adjustStock 執行後會清掉一級快取（clearAutomatically），這裡重新查詢拿到最新庫存
         return AdminProductResponse.from(findOrThrow(id));
     }
@@ -139,6 +148,7 @@ public class AdminProductService {
         });
 
         product.setImagePath(newPath);
+        productCacheEvictor.evictProduct(id);
         return AdminProductResponse.from(productRepository.saveAndFlush(product));
     }
 

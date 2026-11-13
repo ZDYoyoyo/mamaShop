@@ -3,6 +3,7 @@ package com.mamashop.order.service;
 import com.mamashop.common.exception.BusinessException;
 import com.mamashop.common.exception.ErrorCode;
 import com.mamashop.order.entity.Order;
+import com.mamashop.product.cache.ProductCacheEvictor;
 import com.mamashop.product.entity.ProductStatus;
 import com.mamashop.product.repository.ProductRepository;
 import java.time.Instant;
@@ -24,9 +25,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderStockService {
 
     private final ProductRepository productRepository;
+    private final ProductCacheEvictor productCacheEvictor;
 
-    public OrderStockService(ProductRepository productRepository) {
+    public OrderStockService(ProductRepository productRepository, ProductCacheEvictor productCacheEvictor) {
         this.productRepository = productRepository;
+        this.productCacheEvictor = productCacheEvictor;
     }
 
     /**
@@ -48,6 +51,8 @@ public class OrderStockService {
                 throw stockFailure(productId);
             }
         });
+        // 庫存變了，前台快取的「僅剩 N 件」要更新（交易 commit 後才清；下單失敗 rollback 就不清）
+        productCacheEvictor.evictProducts(quantities.keySet());
     }
 
     /** 取消訂單歸還庫存（B09 顧客取消、B10 管理員取消） */
@@ -57,6 +62,7 @@ public class OrderStockService {
         order.getItems().stream()
                 .sorted(Comparator.comparing(item -> item.getProduct().getId()))
                 .forEach(item -> productRepository.increaseStock(item.getProduct().getId(), item.getQuantity(), now));
+        productCacheEvictor.evictProducts(order.getItems().stream().map(item -> item.getProduct().getId()).toList());
     }
 
     /** 扣庫存失敗時，查出原因給使用者清楚的訊息 */

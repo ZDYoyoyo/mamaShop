@@ -703,3 +703,50 @@ F02～F06 做頁面時已經有載入中（骨架畫面）、錯誤、空狀態�
 - ℹ️ 以實際需求來說，家庭小店的尖峰大約每秒幾個請求，目前的效能綽綽有餘；R00／R01 的目的是**量化快取的效果**
 - 🔲 **沒有壓測結帳、後台**：寫入的效能瓶頸在資料庫鎖（B08 已用併發測試驗證正確性），PLAN 的 R00 只要求商品列表與詳情
 - 🔲 **沒有在正式規格的主機上壓測**：要另外開一台同規格的測試主機（不能壓正式站）
+
+## R01 商品快取（Redis）
+
+### 做了什麼
+
+- 新增 `spring-boot-starter-cache`、`spring-boot-starter-data-redis`；本機與正式環境的 compose 加上 `redis:7.4-alpine`（不寫硬碟、最多 64MB、`allkeys-lru`；正式環境沒有 ports）
+- **讀取**：`ProductService` 的商品詳情（key＝id）與**沒有關鍵字的**列表（key＝`分類:頁碼:每頁筆數`）標 `@Cacheable`
+- **清除**：`ProductCacheEvictor` 集中處理，三個地方呼叫：後台改商品（新增、基本資料、上下架、庫存、圖片）、訂單的庫存異動（`OrderStockService` 扣庫存、歸還庫存）、分類改名
+- Redis 的 key 長這樣：`mamashop:productDetail::5`、`mamashop:productList::all:1:12`
+
+### 設計（和傳統 Spring MVC 的差別：Spring Cache 抽象層）
+
+- ℹ️ **`@Cacheable` 是 AOP**（和 `@Transactional` 一樣靠代理）：呼叫方法前先查快取，有就直接回傳、方法根本不執行。Service 的程式碼一行都不用改；換成 Caffeine 或關掉快取只要改設定。注意：同一個類別裡自己呼叫自己（self-invocation）不會經過代理，快取不會生效
+- ℹ️ **不自己建立 CacheManager**，而是用 `RedisCacheManagerBuilderCustomizer` 調整 Spring Boot 自動建立的那個：`spring.cache.type=none` 就自動換成不快取的版本（測試用）
+- ℹ️ **值用 JSON 存、每種快取指定型別**：record 是 final 類別，通用的 JSON serializer 不會在 JSON 裡記錄型別，讀回來是 Map 而轉型失敗；JDK 序列化要每個 DTO 實作 Serializable，也不好讀。用 Jackson 3 的 `JacksonJsonRedisSerializer` 指定型別，`redis-cli` 也看得懂內容
+- ℹ️ **清除列表用 SCAN 不用 KEYS**（`BatchStrategies.scan`）：KEYS 在 key 很多時會卡住整個 Redis（單執行緒）
+- ⚠️ **清除時用 `evictIfPresent()`／`invalidate()`，不用 `evict()`／`clear()`**：Spring 的 Cache 介面規定後兩者「可以延後或非同步執行」，呼叫完不保證已經清掉。**測試實際抓到**：用 `clear()` 時，改完庫存馬上查列表還是舊的
+- ℹ️ **交易 commit 之後才清除**：commit 前清的話，別的請求可能在空檔讀到還沒 commit 的舊資料又存回快取；交易 rollback（例如庫存不足下單失敗）就不清。用 `TransactionSynchronization.afterCommit` 自己控制，而不是 RedisCacheManager 內建的 `transactionAware()`：內建的在 commit 後清除失敗時會把例外丟給呼叫端，變成「訂單成立了但顧客看到 500」
+- ℹ️ **列表一律全部清除**：一個商品的變動可能影響很多頁（排序、上下架、分類篩選），逐頁計算容易出錯；家庭小店的商品變動不頻繁
+- ℹ️ **關鍵字搜尋不快取**：關鍵字可以是任意文字，每個都存會塞滿 Redis（也可以被拿來攻擊），命中率又低
+- ℹ️ **Redis 掛掉時網站照常運作**：`LoggingCacheErrorHandler` 讓快取讀寫失敗只記 log、改查資料庫；清除失敗也只記 log；連線逾時 0.5 秒，不會把網站拖慢；**健康檢查排除 Redis**（`management.health.redis.enabled=false`），快取掛了不會讓整個網站被判定為 DOWN
+- ℹ️ **TTL 10 分鐘**：正常情況下變動時就清除，TTL 是保險（例如直接改資料庫、或清除失敗時）
+- ⚠️ **一個已知的小空檔**：商品在 commit 後、清除前的極短時間內，如果有人剛好讀到舊資料並存回快取，舊資料會留到 TTL（最多 10 分鐘）。只影響顯示的庫存數字；**下單時的庫存檢查在資料庫（B08 的條件更新），不受快取影響，不會超賣**
+
+### 測試
+
+- ℹ️ **其他測試預設不快取**（`src/test/resources/application.properties` 設 `spring.cache.type=none`）：很多測試用 SQL 直接改資料再檢查 API，有快取的話會拿到舊資料
+- ℹ️ `ProductCacheIntegrationTest`（9 個，真的 Redis）：用 SQL 繞過程式改資料庫，再查一次還是舊的 → 證明有快取；後台修改、下架、下單、取消、調整庫存、分類改名都會清；下單失敗（rollback）不清；關鍵字搜尋不快取
+- ℹ️ `ProductCacheRedisDownTest`：Redis 連不到時讀寫都正常、沒有變慢
+- ⚠️ **測試的連線數**：每個設定不同的測試類別會各自建立 Spring context，各有一個連線池；新增兩個後超過 PostgreSQL 的 100 條上限（`too many clients already`）。測試設定連線池最多 4 條
+- ℹ️ CI 的後端 job 加上 Redis service container。後端測試共 307 個全部通過（連續兩次）
+
+### 壓測結果（和 R00 同一台機器、同樣步驟，詳見 `loadtest/README.md`）
+
+| VUS | QPS | p95 |
+|---|---|---|
+| 50 | 1,386 → **2,214**（+60%） | 70.3 → **46.7 ms** |
+| 100 | 1,348 → **2,365**（+75%） | 158.1 → **83.8 ms** |
+
+- 資料庫 CPU 103% → 39%；**沒快取的搜尋幾乎沒變**（對照組），證明改善來自快取
+- Redis 命中率 100%，944 個 key 只用 2 MB
+
+### 之後要注意
+
+- 🔲 **新增會改商品資料的功能時，記得呼叫 `ProductCacheEvictor`**，否則前台最多 10 分鐘看到舊資料
+- 🔲 本機用 `docker compose down -v` 清空資料庫時，Redis 的快取還在（不同容器）：重建資料後商品 id 可能相同但內容不同，最多 10 分鐘內看到舊的。要立刻清：`docker compose exec redis redis-cli FLUSHALL`
+- 🔲 Redis 沒有設定密碼：只在 Docker 內部網路（正式環境沒有 ports），外面連不到
