@@ -207,9 +207,13 @@ onBeforeRouteLeave(async () => {
   </el-result>
   <LoadError v-else-if="loadError" :message="loadError" @retry="load" />
 
+  <!-- novalidate：關掉瀏覽器內建的表單檢查，只用 Element Plus 的驗證規則。
+       數字輸入框是原生 <input type="number" step="10">，瀏覽器會認為 65、1299 這種「不是 step 倍數」的值不合法，
+       直接擋下送出、手機上也沒有任何提示（A03 實測發現） -->
   <el-form
     v-else
     ref="formRef"
+    novalidate
     :model="form"
     :rules="rules"
     label-position="top"

@@ -30,7 +30,7 @@ public enum ErrorCode {
 
     // ===== 分類 =====
     CATEGORY_NAME_EXISTS(HttpStatus.CONFLICT, "分類名稱已存在"),
-    CATEGORY_HAS_PRODUCTS(HttpStatus.CONFLICT, "分類底下還有商品，請先移動或刪除商品"),
+    CATEGORY_HAS_PRODUCTS(HttpStatus.CONFLICT, "分類底下還有商品（包含下架的），請先把商品改到其他分類"),
 
     // ===== 商品 =====
     STOCK_ADJUSTMENT_INVALID(HttpStatus.CONFLICT, "調整後庫存不可小於 0"),
