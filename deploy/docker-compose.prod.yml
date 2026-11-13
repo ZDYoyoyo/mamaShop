@@ -106,6 +106,8 @@ services:
       MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-true}
       MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS:-true}
       MAIL_FROM: ${MAIL_FROM:-}
+      # 宅配送達後多久自動完成（M02），預設 7d
+      ORDER_AUTO_COMPLETE_AFTER: ${ORDER_AUTO_COMPLETE_AFTER:-7d}
       DB_HOST: db
       DB_PORT: 5432
       DB_NAME: ${DB_NAME}

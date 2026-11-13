@@ -13,6 +13,7 @@ import com.mamashop.order.entity.Order;
 import com.mamashop.order.entity.OrderStatus;
 import com.mamashop.order.entity.OrderStatusHistory;
 import com.mamashop.order.entity.PaymentStatus;
+import com.mamashop.order.event.OrderDeliveredEvent;
 import com.mamashop.order.event.OrderEvent;
 import com.mamashop.order.event.OrderEventType;
 import com.mamashop.order.repository.OrderRepository;
@@ -116,6 +117,8 @@ public class AdminOrderService {
     public AdminOrderDetailResponse deliver(String orderNo, long version, Long adminId, String note) {
         Order order = loadForUpdate(orderNo, version);
         changeStatus(order, OrderStatus.DELIVERED, adminId, note);
+        // 宅配訂單排定 N 天後自動完成（M02），交易 commit 後才排
+        eventPublisher.publishEvent(new OrderDeliveredEvent(orderNo, order.getShippingMethod()));
         return toDetail(order);
     }
 
@@ -130,6 +133,33 @@ public class AdminOrderService {
         order.setPaidAt(now);
         changeStatus(order, OrderStatus.COMPLETED, adminId, note);
         return toDetail(order);
+    }
+
+    /**
+     * 系統自動完成（M02：宅配送達超過 N 天，由延遲任務呼叫）。
+     *
+     * <p>和 {@link #complete} 的差別：
+     * <ul>
+     *   <li><b>不比對版本號</b>：沒有「管理員看到的畫面」，而是直接看目前的狀態。
+     *       N 天裡家人可能已經手動完成或改成已退回 → 不是「已送達」就什麼都不做，回傳 false。
+     *       同一則訊息處理兩次，第二次也只是 false（冪等）</li>
+     *   <li><b>操作者是 NULL</b>（狀態紀錄顯示「系統」，見 V1 的 order_status_histories）</li>
+     *   <li>和家人同時按「完成」：兩邊都讀到「已送達」，但 @Version 讓後寫入的那個失敗 rollback，
+     *       不會有兩筆「→ 已完成」的紀錄</li>
+     * </ul>
+     *
+     * @return 這次有把訂單改成已完成
+     */
+    @Transactional
+    public boolean autoComplete(String orderNo, String note) {
+        Order order = orderRepository.findByOrderNo(orderNo).orElse(null);
+        if (order == null || order.getStatus() != OrderStatus.DELIVERED) {
+            return false;
+        }
+        order.setPaymentStatus(PaymentStatus.PAID);
+        order.setPaidAt(Instant.now());
+        changeStatus(order, OrderStatus.COMPLETED, null, note);
+        return true;
     }
 
     /**
@@ -180,7 +210,7 @@ public class AdminOrderService {
         OrderStatus from = order.transitionTo(target, Instant.now());
         orderRepository.saveAndFlush(order);
         historyRepository.save(new OrderStatusHistory(
-                order, from, target, userRepository.getReferenceById(adminId), note));
+                order, from, target, adminId == null ? null : userRepository.getReferenceById(adminId), note));
     }
 
     private Order findOrThrow(String orderNo) {
