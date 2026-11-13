@@ -159,7 +159,8 @@ jobs:
       - name: 檢查 docker-compose.prod.yml
         run: |
           cp deploy/.env.example deploy/.env
-          sed -i -e 's/^DB_PASSWORD=$/DB_PASSWORD=ci/' -e 's/^JWT_SECRET=$/JWT_SECRET=ci/' deploy/.env
+          # 範本裡空白的必填值（密碼、密鑰）填入假的值；之後新增必填值時記得加在這裡
+          sed -i -E 's/^(DB_PASSWORD|JWT_SECRET|RABBITMQ_PASSWORD)=$/\1=ci/' deploy/.env
           docker compose -f deploy/docker-compose.prod.yml config --quiet
 
       - name: 建置後端映像檔
