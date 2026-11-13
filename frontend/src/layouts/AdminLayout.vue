@@ -12,12 +12,13 @@ import { computed, ref } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
-import { CollectionTag, DataLine, Expand, Goods, Van } from '@element-plus/icons-vue'
+import { CollectionTag, DataLine, Expand, Goods, Tickets, Van } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 
 /** 後台選單：name 是路由名稱 */
 const ADMIN_MENU = [
   { name: 'admin-home', title: '概覽', icon: DataLine },
+  { name: 'admin-orders', title: '訂單', icon: Tickets },
   { name: 'admin-products', title: '商品', icon: Goods },
   { name: 'admin-categories', title: '分類', icon: CollectionTag },
   { name: 'admin-shipping', title: '運費設定', icon: Van },

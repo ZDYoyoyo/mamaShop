@@ -49,3 +49,16 @@ export const PRODUCT_STATUS = {
   ON_SALE: { label: '上架中', type: 'success' },
   OFF_SALE: { label: '已下架', type: 'info' },
 }
+
+/** 付款狀態 */
+export const PAYMENT_STATUS_LABELS = {
+  UNPAID: '未付款',
+  PAID: '已付款',
+  REFUNDED: '已退款',
+}
+
+/** 操作者角色（訂單狀態紀錄） */
+export const ROLE_LABELS = {
+  ADMIN: '管理員',
+  USER: '顧客',
+}
