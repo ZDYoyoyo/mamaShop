@@ -584,3 +584,45 @@ F02～F06 做頁面時已經有載入中（骨架畫面）、錯誤、空狀態�
 - 🔲 **沒有 fail2ban**：已經只允許金鑰登入，暴力猜密碼不會成功；log 會比較多但不影響安全。需要的話之後再加
 - 🔲 **SSH 沒有換 port**：換 port 只能減少 log 裡的掃描紀錄，不增加安全性，還要多記一個 port
 - 🔲 雲端廠商的防火牆（Security Group）依廠商不同，指南只提醒「也設定成只開 22、80、443」
+
+## D03 正式環境部署
+
+> 和 D01 一樣，實際部署要等主機。這個任務的產出是**正式環境的設定檔＋部署指南**，並且在本機用正式設定（`deploy/docker-compose.prod.yml`、正式的 Nginx 設定）完整跑過一次。
+
+| 檔案 | 用途 |
+|---|---|
+| `deploy/docker-compose.prod.yml` | db、backend、web（Nginx）三個服務；只有 web 對外開 80 |
+| `deploy/nginx/Dockerfile` | 多階段：Node 建置前端 → Nginx 映像檔（75MB） |
+| `deploy/nginx/default.conf` | SPA 路由、快取、gzip、`/api` 轉發、`/uploads` 直接讀 volume、413 回 JSON |
+| `deploy/nginx/security-headers.conf` | CSP、nosniff、X-Frame-Options、Referrer-Policy、Permissions-Policy |
+| `deploy/.env.example` | 正式環境設定範本（`deploy/.env` 不進版控，`.gitignore` 已涵蓋） |
+| `.dockerignore`（根目錄） | 前端建置 context 用 repo 根目錄，只放行 `frontend/`、`deploy/nginx/`（不把 `.env` 送進 Docker） |
+| `docs/deploy/D03-deploy.md` | 安裝 Docker → deploy key 下載程式碼 → 建立 `.env` → 建置啟動 → 檢查 → 更新流程、常用指令、常見問題 |
+
+### 設計
+
+- ℹ️ **資料庫、後端完全不寫 `ports`**：只有 Docker 內部網路連得到（Docker 公開的 port 會繞過 ufw，D01）。實測：主機連不到 8080、`docker port` 顯示兩者都沒有公開
+- ℹ️ **前端與 API 同一個網址**（Nginx 依路徑分流），瀏覽器不會遇到 CORS；`CORS_ALLOWED_ORIGINS` 設成網站網址只是保險
+- ⚠️ **`SERVER_FORWARD_HEADERS_STRATEGY=native`（F08 留下的問題）**：Nginx 送 `X-Forwarded-Proto/Host/Port`，後端用 Tomcat 的 RemoteIpValve 讀取（只相信內部網段來的 header）。實測在 Docker 網路裡模擬 HTTPS：帶 `X-Forwarded-Proto: https` 時登入 200；不帶時同一個請求被 Spring Security 當成跨來源 → 403。D04 改成 HTTPS 後一定要有這個設定
+- ℹ️ **商品圖片由 Nginx 直接讀 volume**（唯讀掛載），不經過 JVM；快取一年（檔名是 UUID）。`location /uploads/` 與 `alias /srv/uploads/` 都以 `/` 結尾，避免經典的 alias 路徑穿越設定錯誤；實測 `..`、`%2f` 都回前端首頁，讀不到其他檔案；目錄列表 403
+- ⚠️ **Nginx 預設只收 1MB 的請求**，上傳圖片會 413。`/api` 放寬到 11MB（後端上限 10MB）；超過時 Nginx 回和後端相同格式的 JSON（預設是 HTML，前端只會顯示「系統發生錯誤」）。實測 7.7MB 上傳成功、12MB 回 413 JSON
+- ℹ️ **`proxy_pass` 用變數＋`resolver 127.0.0.11`**：直接寫 `proxy_pass http://backend:8080` 只在 Nginx 啟動時查一次 IP，後端容器重建換了 IP 就一直 502，要重啟 Nginx。實測：強迫後端重建後 IP 從 .3 變 .5，重啟期間回 502，啟動完成後不用重啟 Nginx 就恢復 200
+- ⚠️ **`add_header` 的繼承陷阱**：location 裡有自己的 `add_header`，外層的就全部不繼承。安全 header 抽成 `security-headers.conf`，每個 location 都 `include`
+- ℹ️ **API 回應的 header 去重**：Spring Security 也會送 `X-Content-Type-Options`、`X-Frame-Options`，`/api` 用 `proxy_hide_header` 隱藏後端的，只留 Nginx 的一份（同一個 header 出現兩次，有些瀏覽器會整個忽略）
+- ℹ️ **CSP**（F04 的 NOTES 提到「正式環境再加 CSP」）：`script-src 'self'`（Vite 建置的 index.html 沒有內嵌程式）；`style-src` 需要 `'unsafe-inline'`（Element Plus 用 style 屬性）；`img-src` 加 `data:`（圖示）、`blob:`（A02 上傳前預覽）。實測在手機尺寸走完整流程（首頁、註冊、下單、後台概覽、確認訂單、選圖預覽、上傳），**沒有任何 CSP 違規**
+- ℹ️ **快取**：`index.html` no-cache（改版後重新整理就拿到新的 JS 檔名）；`/assets/` 檔名有 hash，快取一年 immutable；JS 有 gzip
+- ℹ️ **後端記憶體上限 768MB**（`mem_limit`），JVM 依此用 75% 當 heap；避免吃光 2GB 主機的記憶體
+- ℹ️ 正式環境 `APP_PROFILE` 空白（不載入測試資料）、`API_DOCS_ENABLED=false`（實測 `/v3/api-docs` 404）；第一個管理員由 `.env` 建立
+- ℹ️ Compose 專案名稱 `mamashop-prod`：和本機開發（`mamashop`）的容器、volume 分開，在同一台電腦測試不會動到開發資料庫
+- ℹ️ 指南建議**後端、前端分開建置**：2GB 主機同時跑 Maven 和 npm 容易記憶體不足
+
+### 測試方式的限制
+
+- ⚠️ 雲端開發環境的網路要透過代理伺服器，Docker 建置時：前端用「多信任代理 CA」的測試用 Dockerfile 建置成功（和正式檔案只差兩行）；後端的 Maven wrapper 用 busybox `wget` 下載 Maven，不支援這個代理的連線方式，所以改成在主機上建好 jar、用**和 `backend/Dockerfile` 相同的執行階段**建映像檔。`backend/Dockerfile` 的建置階段在 B12 已經驗證過。測試用的檔案都在 scratchpad，沒有 commit
+- 啟動、Nginx、網路、volume、header 等 D03 新增的部分，都是用正式的 `deploy/docker-compose.prod.yml` 與 Nginx 設定測試
+
+### 刻意沒做
+
+- 🔲 **沒有零停機更新**：更新後端時約 10～20 秒回 502（前端顯示「伺服器暫時無法使用」）。家庭小店可以接受；需要的話之後用兩個後端容器輪流更新
+- 🔲 **在主機上建置映像檔**：簡單但慢、吃記憶體。D06（CI）之後可以改成 GitHub Actions 建好映像檔、主機只負責下載
+- 🔲 HTTPS、HSTS 在 D04；log 輪替、健康檢查在 D07；備份在 D05
