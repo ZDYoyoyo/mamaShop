@@ -43,3 +43,9 @@ export const SHIPPING_METHOD_LABELS = {
   HOME_DELIVERY: '宅配',
   CVS_PICKUP: '超商取貨',
 }
+
+/** 商品狀態 */
+export const PRODUCT_STATUS = {
+  ON_SALE: { label: '上架中', type: 'success' },
+  OFF_SALE: { label: '已下架', type: 'info' },
+}

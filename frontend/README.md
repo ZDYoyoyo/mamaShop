@@ -26,7 +26,8 @@ src/
 │   ├── http.js       # axios 實例：自動帶 token、統一錯誤格式、401 導向登入頁
 │   ├── catalog.js    # 商品、分類 API
 │   ├── auth.js       # 註冊、登入 API
-│   └── orders.js     # 建立、查詢、列出、取消訂單 API
+│   ├── orders.js     # 建立、查詢、列出、取消訂單 API
+│   └── admin/        # 後台 API（products.js：商品管理）
 ├── stores/
 │   ├── auth.js       # 登入狀態（token、會員資料，存在 localStorage）
 │   └── cart.js       # 購物車（存在 localStorage）
@@ -35,6 +36,7 @@ src/
 ├── components/       # 可重複使用的元件（ProductCard、ProductGrid…）
 ├── utils/
 │   ├── format.js     # 金額、庫存顯示
+│   ├── image.js      # 上傳前縮小照片、移除 EXIF
 │   ├── validation.js # 表單驗證規則（和後端一致）
 │   └── labels.js     # 後端代碼 → 中文（超商品牌、付款方式）
 └── assets/main.css   # 全站基本樣式與顏色變數
