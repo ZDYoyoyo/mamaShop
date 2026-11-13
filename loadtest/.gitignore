@@ -1,0 +1,2 @@
+# k6 的結果檔（--summary-export）。整理後的數據記在 loadtest/README.md
+results/
