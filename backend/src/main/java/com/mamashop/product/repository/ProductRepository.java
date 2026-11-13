@@ -3,6 +3,7 @@ package com.mamashop.product.repository;
 import com.mamashop.product.entity.Product;
 import com.mamashop.product.entity.ProductStatus;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -87,4 +88,11 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
     @Modifying
     @Query("UPDATE Product p SET p.stock = p.stock + :quantity, p.updatedAt = :now WHERE p.id = :id")
     int increaseStock(@Param("id") Long id, @Param("quantity") int quantity, @Param("now") Instant now);
+
+    // ===== 後台概覽（A05）：低庫存商品 =====
+
+    long countByStatusAndStockLessThanEqual(ProductStatus status, int stock);
+
+    /** 庫存少的排前面，最多 20 筆 */
+    List<Product> findTop20ByStatusAndStockLessThanEqualOrderByStockAscIdAsc(ProductStatus status, int stock);
 }

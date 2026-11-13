@@ -27,7 +27,7 @@ src/
 │   ├── catalog.js    # 商品、分類 API
 │   ├── auth.js       # 註冊、登入 API
 │   ├── orders.js     # 建立、查詢、列出、取消訂單 API
-│   └── admin/        # 後台 API（orders、products、categories、shipping）
+│   └── admin/        # 後台 API（dashboard、orders、products、categories、shipping）
 ├── stores/
 │   ├── auth.js       # 登入狀態（token、會員資料，存在 localStorage）
 │   └── cart.js       # 購物車（存在 localStorage）
