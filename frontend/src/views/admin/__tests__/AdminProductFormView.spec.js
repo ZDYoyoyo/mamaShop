@@ -75,6 +75,12 @@ describe('AdminProductFormView', () => {
     URL.revokeObjectURL = vi.fn()
   })
 
+  it('表單關掉瀏覽器內建檢查（否則 1299、1280.5 這種價格會被瀏覽器擋下）', async () => {
+    const { wrapper } = await mountForm('/admin/products/new')
+
+    expect(wrapper.find('form').attributes('novalidate')).toBeDefined()
+  })
+
   it('新增：沒填必填欄位時不送出', async () => {
     const { wrapper } = await mountForm('/admin/products/new')
 

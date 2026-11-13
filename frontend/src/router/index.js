@@ -108,6 +108,16 @@ export const routes = [
         props: true,
         meta: { menu: 'admin-products' },
       },
+      {
+        path: 'categories',
+        name: 'admin-categories',
+        component: () => import('@/views/admin/AdminCategoriesView.vue'),
+      },
+      {
+        path: 'shipping',
+        name: 'admin-shipping',
+        component: () => import('@/views/admin/AdminShippingView.vue'),
+      },
     ],
   },
   {
