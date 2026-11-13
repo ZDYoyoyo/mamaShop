@@ -16,8 +16,9 @@
 mamaShop/
 ├── backend/           # Spring Boot
 ├── frontend/          # Vue 3（前台與後台同一個 app，用路由區分）
-├── deploy/            # 正式環境的 docker-compose、Nginx 設定、備份腳本
+├── deploy/            # 正式環境：主機設定（server/）、檢查與維運腳本（scripts/）、之後的 docker-compose、Nginx
 ├── docs/PLAN.md       # 專案計畫與任務清單
+├── docs/deploy/       # 部署操作指南（D01 起，每個指令都有說明）
 ├── CLAUDE.md          # AI 協作規則
 ├── .env.example       # 環境變數範本（複製成 .env）
 └── docker-compose.yml # 本機開發用
