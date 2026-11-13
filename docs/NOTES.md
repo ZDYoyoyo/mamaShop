@@ -648,3 +648,24 @@ F02～F06 做頁面時已經有載入中（骨架畫面）、錯誤、空狀態�
 - ℹ️ **第一次執行的實際結果**：三個 job 約 1.5 分鐘全部通過；log 確認 `Tests run: 287, Failures: 0`、`No active profile set`（沒有載入測試資料）。推新 commit 時舊的執行被自動取消（concurrency 有效）
 - ℹ️ 第一次執行時 GitHub 警告 `actions/checkout@v4`、`setup-java@v4` 用的 Node.js 20 已淘汰，改成 `@v5`（Node.js 24）
 - 🔲 **action 用大版本標籤**（`@v5`）而不是固定的 commit SHA：比較好讀、會自動拿到修正版；代價是理論上 action 被竄改時會受影響。這個專案只用 GitHub 官方的 action，風險低
+
+## D07 基本監控
+
+| 項目 | 狀態 |
+|---|---|
+| 健康檢查 API `GET /api/actuator/health` | ✅ |
+| Docker 健康檢查（db、backend、web）、web 等 backend healthy 才啟動 | ✅ |
+| Docker log 輪替（每個容器 3 × 10MB） | ✅ |
+| 外部定期檢查＋通知 | ⏳ 要等網站上線；`docs/deploy/D07-monitoring.md` 有 UptimeRobot 的設定步驟 |
+
+- ℹ️ **新增依賴 `spring-boot-starter-actuator`**。只暴露 `health`；`show-details: never`（只回 UP／DOWN，不公開資料庫種類、硬碟空間）；關閉 Kubernetes 的 probes 群組（Spring Boot 4 預設會在回應加 `groups`，測試抓到的）
+- ℹ️ **路徑改成 `/api/actuator`**（`management.endpoints.web.base-path`）：正式環境的 Nginx 已經把 `/api` 轉給後端，不用另外設定 Nginx
+- ℹ️ Spring Security 只放行 `GET /api/actuator/health`；其他 actuator 端點維持「預設要登入」。就算是管理員，`env`、`heapdump` 等也是 404（沒有暴露）
+- ℹ️ **權限另外測**（`HealthEndpointTest`，10 個）：AccessControlTest 的完整性檢查只掃 Controller，看不到 Actuator 的端點。後端測試共 297 個全部通過
+- ℹ️ **Docker 健康檢查**：backend 用映像檔內建的 busybox `wget` 打 health（每 30 秒、連續 3 次失敗 → unhealthy、啟動後 60 秒內失敗不算）；web 打首頁；db 原本就有 `pg_isready`
+- ℹ️ **log 輪替寫在 compose 裡**（YAML anchor `x-logging` 給三個服務共用），跟著版控走，不用另外改主機的 Docker 設定
+- ℹ️ 實測（正式設定）：啟動順序 db healthy → backend healthy → web；經過 Nginx 打 health 回 `{"status":"UP"}`、其他端點 401；**停掉資料庫：health 約 30 秒後回 503 DOWN（等連線池逾時），backend 變 unhealthy；資料庫恢復後 backend 自己恢復 healthy，不用重啟**；三個容器的 log 設定都是 json-file 3 × 10MB
+- ℹ️ 本機下載 actuator 時 Maven Central 回 429（請求太多，雲端環境的代理造成），等幾分鐘後恢復
+- ⚠️ **`unhealthy` 不會自動重啟容器**：Docker 的 restart 只在程式結束時生效。實測資料庫恢復後後端會自己恢復，所以先不加自動重啟（例如 autoheal），避免問題在資料庫時一直重啟後端反而更亂
+- 🔲 **資料庫斷線時 health 要等 30 秒才回應**（Hikari 預設的連線逾時）。外部監控會把「逾時」也當成掛掉，一樣會通知，所以維持預設；縮短逾時會影響尖峰時的正常請求（R00 壓測時再看）
+- 🔲 **沒有收集 log、沒有指標儀表板**（例如 Prometheus＋Grafana）：家庭小店用不到，PLAN 也只要求「基本」監控

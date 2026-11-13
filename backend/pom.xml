@@ -39,6 +39,11 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
+		<!-- 健康檢查（D07）：/api/actuator/health 回報後端與資料庫是否正常 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
 		<!-- JWT：產生與驗證 token。jjwt-impl、jjwt-gson 只在執行期需要 -->
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>

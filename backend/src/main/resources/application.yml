@@ -59,6 +59,25 @@ app:
     # 圖片大小上限（程式內再檢查一次）
     max-image-size: 10MB
 
+# ===== 健康檢查（Spring Boot Actuator，D07）=====
+# GET /api/actuator/health → {"status":"UP"}；後端有問題或連不到資料庫時回 503 {"status":"DOWN"}
+# 給 Docker healthcheck 和外部監控服務定期檢查用。
+management:
+  endpoints:
+    web:
+      # 放在 /api 底下：正式環境的 Nginx 已經把 /api 轉給後端，不用另外設定
+      base-path: /api/actuator
+      exposure:
+        # 只開放 health。其他端點（env、beans、heapdump…）會洩漏設定與記憶體內容，絕對不能公開
+        include: health
+  endpoint:
+    health:
+      # 不公開細節（資料庫種類、硬碟空間）：給陌生人看的只有 UP／DOWN
+      show-details: never
+      # 不需要 Kubernetes 的 liveness／readiness 群組（預設會在回應裡列出 groups）
+      probes:
+        enabled: false
+
 # ===== API 文件（springdoc-openapi，B13）=====
 # 預設關閉：API 文件會列出所有後台 API，正式環境不需要公開。本機在 .env 設定 API_DOCS_ENABLED=true
 #   Swagger UI：http://localhost:8080/swagger-ui.html

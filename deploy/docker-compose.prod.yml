@@ -17,8 +17,19 @@
 # 和本機開發（mamashop）分開，在同一台電腦測試時不會用到同一個資料庫
 name: mamashop-prod
 
+# Docker log 輪替（D07）：預設的 json-file log 會一直長大，幾個月後可能把硬碟塞滿。
+# 每個容器最多保留 3 個 10MB 的檔案（滿了刪最舊的）。下面每個服務用 <<: *logging 引用這段。
+# x- 開頭的欄位 docker compose 會忽略，專門用來放共用設定（YAML anchor：&logging 定義、*logging 引用）
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
 services:
   db:
+    <<: *logging
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
@@ -36,6 +47,7 @@ services:
     # 沒有 ports：只有同一個 Docker 網路裡的 backend 連得到
 
   backend:
+    <<: *logging
     build: ../backend
     restart: unless-stopped
     depends_on:
@@ -66,9 +78,19 @@ services:
     # 記憶體上限：JVM 依這個值決定 heap（Dockerfile 設定 MaxRAMPercentage=75 → 約 576MB）。
     # 避免後端吃光主機記憶體，連資料庫一起被系統砍掉
     mem_limit: 768m
+    # 健康檢查（D07）：每 30 秒問一次 /api/actuator/health（也會檢查資料庫連線）。
+    # 結果顯示在 docker compose ps 的 STATUS（healthy／unhealthy），web 也等它 healthy 才啟動。
+    # wget 是映像檔內建的（Alpine 的 busybox）。start_period：啟動的前 60 秒失敗不算（Spring Boot 啟動要十幾秒）
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/api/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     # 沒有 ports：只有 Nginx 透過 Docker 內部網路連得到
 
   web:
+    <<: *logging
     build:
       # 建置時需要 frontend/（前端原始碼）和 deploy/nginx/（設定檔），所以用 repo 根目錄當 context；
       # 根目錄的 .dockerignore 只放行這兩個資料夾
@@ -76,7 +98,14 @@ services:
       dockerfile: deploy/nginx/Dockerfile
     restart: unless-stopped
     depends_on:
-      - backend
+      # 等後端健康檢查通過才啟動 Nginx：剛部署時比較不會看到「伺服器暫時無法使用」
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     ports:
       # 對外只開這一個 port。HTTP_PORT 預設 80；本機測試時可以改成其他 port
       - "${HTTP_PORT:-80}:80"
