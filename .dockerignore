@@ -1,0 +1,10 @@
+# 用 repo 根目錄當建置 context 時（deploy/nginx/Dockerfile）送給 Docker 的檔案。
+# 只放行建置需要的資料夾：避免把 .env（機密）、node_modules、後端的 target/ 送進去。
+# 後端用 backend/ 當 context，看的是 backend/.dockerignore，不受這個檔案影響。
+*
+!frontend/
+!deploy/nginx/
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/.vite/

@@ -163,7 +163,7 @@ mamaShop/
 
 - [ ] **D01 主機**：租一台 Linux VPS；SSH 金鑰登入、關閉密碼登入；防火牆只開 22、80、443（📄 操作指南與檢查腳本已完成：`docs/deploy/D01-server.md`，待實際租主機操作）
 - [ ] **D02 網域**：購買網域、設定 DNS 指向主機
-- [ ] **D03 正式環境部署**：`deploy/docker-compose.prod.yml` 包含 Nginx、後端、PostgreSQL；Nginx 提供前端靜態檔並把 `/api` 轉給後端；資料庫不對外開放；伺服器上的 `.env` 不進版控
+- [ ] **D03 正式環境部署**：`deploy/docker-compose.prod.yml` 包含 Nginx、後端、PostgreSQL；Nginx 提供前端靜態檔並把 `/api` 轉給後端；資料庫不對外開放；伺服器上的 `.env` 不進版控（📄 設定檔與部署指南已完成：`docs/deploy/D03-deploy.md`，已在本機用正式設定完整驗證，待主機實際部署）
 - [ ] **D04 HTTPS**：Let's Encrypt 憑證與自動續期
 - [ ] **D05 備份**：每日 `pg_dump` 與圖片目錄備份、保留天數、複製到主機以外的地方；**實際做一次還原測試**
 - [ ] **D06 CI**：GitHub Actions 在 PR 時自動跑測試與前端建置；之後可加自動部署
