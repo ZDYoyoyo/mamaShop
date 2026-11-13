@@ -1,6 +1,9 @@
 package com.mamashop.order.repository;
 
 import com.mamashop.order.entity.Order;
+import com.mamashop.order.entity.OrderStatus;
+import com.mamashop.shipping.entity.ShippingMethodCode;
+import java.time.Instant;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -37,4 +40,17 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     @Override
     @EntityGraph(attributePaths = "user")
     Page<Order> findAll(Specification<Order> spec, Pageable pageable);
+
+    // ===== 後台概覽（A05）：只算數量，不載入訂單 =====
+
+    /** 某個時間點之後建立的訂單數（今日訂單） */
+    long countByCreatedAtGreaterThanEqual(Instant from);
+
+    long countByStatus(OrderStatus status);
+
+    /** 例如：超商取貨、已送達（到店未取件） */
+    long countByStatusAndShippingMethod(OrderStatus status, ShippingMethodCode shippingMethod);
+
+    /** 例如：最近 30 天退回 */
+    long countByStatusAndReturnedAtGreaterThanEqual(OrderStatus status, Instant from);
 }

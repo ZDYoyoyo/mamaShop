@@ -97,6 +97,7 @@ class AccessControlTest {
                 e("POST", "/api/admin/products/{id}/image", Access.ADMIN),
                 e("GET", "/api/admin/shipping-methods", Access.ADMIN),
                 e("PUT", "/api/admin/shipping-methods/{id}", Access.ADMIN),
+                e("GET", "/api/admin/dashboard", Access.ADMIN),
                 e("GET", "/api/admin/orders", Access.ADMIN),
                 e("GET", "/api/admin/orders/{orderNo}", Access.ADMIN),
                 e("POST", "/api/admin/orders/{orderNo}/confirm", Access.ADMIN),

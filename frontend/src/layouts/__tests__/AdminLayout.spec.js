@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
+
+// 後台首頁會讀取概覽；這裡只測版面，換成假的
+vi.mock('@/api/admin/dashboard', () => ({ getDashboard: vi.fn(() => new Promise(() => {})) }))
 import { routes } from '@/router'
 import { useAuthStore } from '@/stores/auth'
 import AdminLayout from '@/layouts/AdminLayout.vue'
