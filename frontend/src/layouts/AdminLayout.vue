@@ -6,13 +6,13 @@
  * - 手機（< 768px）：選單收起來，按左上角「☰」從左邊滑出（el-drawer）
  *   兩種都畫出來，用 CSS 決定顯示哪一個，不需要用 JavaScript 判斷螢幕寬度
  *
- * 選單項目在 ADMIN_MENU：之後每個後台功能（A02～A06）加一行。
+ * 選單項目在 ADMIN_MENU：每個後台功能一行。
  */
 import { computed, ref } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
-import { CollectionTag, DataLine, Expand, Goods, Tickets, Van } from '@element-plus/icons-vue'
+import { CollectionTag, DataLine, Expand, Goods, Tickets, User, Van } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 
 /** 後台選單：name 是路由名稱 */
@@ -22,6 +22,7 @@ const ADMIN_MENU = [
   { name: 'admin-products', title: '商品', icon: Goods },
   { name: 'admin-categories', title: '分類', icon: CollectionTag },
   { name: 'admin-shipping', title: '運費設定', icon: Van },
+  { name: 'admin-accounts', title: '管理員', icon: User },
 ]
 
 const auth = useAuthStore()

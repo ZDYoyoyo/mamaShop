@@ -130,6 +130,11 @@ export const routes = [
         name: 'admin-shipping',
         component: () => import('@/views/admin/AdminShippingView.vue'),
       },
+      {
+        path: 'accounts',
+        name: 'admin-accounts',
+        component: () => import('@/views/admin/AdminAccountsView.vue'),
+      },
     ],
   },
   {
