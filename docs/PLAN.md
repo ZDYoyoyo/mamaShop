@@ -161,7 +161,7 @@ mamaShop/
 
 ## 第 4 階段：上線
 
-- [ ] **D01 主機**：租一台 Linux VPS；SSH 金鑰登入、關閉密碼登入；防火牆只開 22、80、443
+- [ ] **D01 主機**：租一台 Linux VPS；SSH 金鑰登入、關閉密碼登入；防火牆只開 22、80、443（📄 操作指南與檢查腳本已完成：`docs/deploy/D01-server.md`，待實際租主機操作）
 - [ ] **D02 網域**：購買網域、設定 DNS 指向主機
 - [ ] **D03 正式環境部署**：`deploy/docker-compose.prod.yml` 包含 Nginx、後端、PostgreSQL；Nginx 提供前端靜態檔並把 `/api` 轉給後端；資料庫不對外開放；伺服器上的 `.env` 不進版控
 - [ ] **D04 HTTPS**：Let's Encrypt 憑證與自動續期

@@ -559,3 +559,28 @@ F02～F06 做頁面時已經有載入中（骨架畫面）、錯誤、空狀態�
 - 🔲 **沒有權限分級**（B14 已記錄）
 
 > 第 3 階段（後台 A01～A06）完成。
+
+---
+
+# 第 4 階段：上線
+
+## D01 主機
+
+> 租主機需要你本人操作（付費、帳號），所以這個任務的產出是**操作指南＋設定檔＋檢查腳本**，在 Ubuntu 24.04 容器裡完整演練過。實際租好主機、照指南做完、`check-server.sh` 全部 PASS，才算完成。
+
+| 檔案 | 用途 |
+|---|---|
+| `docs/deploy/D01-server.md` | 操作指南：產生金鑰（Windows）→ 建立 deploy 帳號 → 只允許金鑰登入 → ufw → 自動更新 → swap → 時區 → 檢查；含被鎖在外面的處理與常見問題 |
+| `deploy/server/sshd-hardening.conf` | SSH 設定，放到 `/etc/ssh/sshd_config.d/01-mamashop-hardening.conf` |
+| `deploy/scripts/check-server.sh` | 只讀檢查，每項 PASS／FAIL／WARN，有 FAIL 時結束代碼 1 |
+
+- ℹ️ **SSH 設定放 `sshd_config.d/` 而不是改主設定檔**：系統更新時比較不會衝突，也容易還原（刪掉檔案就好）
+- ⚠️ **檔名必須 `01-` 開頭**：sshd 同一個設定「先讀到的為準」，Ubuntu 雲端主機的 `50-cloud-init.conf` 會打開密碼登入。容器實測：取名 `99-` 時 `sshd -T` 顯示 `passwordauthentication yes`（設定被蓋掉）；取名 `01-` 才是 `no`
+- ⚠️ **Docker 公開的 port 會繞過 ufw**（直接改 iptables）。D03 的正式環境只有 Nginx 公開 80、443，資料庫與後端不寫 `ports`。檢查腳本除了看 ufw，也用 `ss` 檢查「實際對所有網卡監聽的 port」，實測模擬 5432 對外開放時會 FAIL
+- ℹ️ **檢查用 `sshd -T`（實際生效的設定）**，不是 grep 設定檔：多個設定檔互相覆蓋時，只有 `sshd -T` 是準的
+- ℹ️ 指南的順序是為了**不把自己鎖在外面**：先建立 deploy 並確認能登入、sudo 正常，才關閉 root 登入；改 SSH 設定時保留舊連線、另開視窗測試；ufw 先允許 OpenSSH 再啟用
+- ℹ️ 容器演練結果：強化前密碼登入、root 登入 FAIL；強化後實際 SSH 連線——deploy 金鑰登入成功、root 被拒、密碼登入被拒（不會問密碼）；檢查腳本全部 PASS（容器無法開 swap，只有 WARN）；shellcheck 沒有問題
+- ℹ️ 主機規格建議 2GB 記憶體（最少 1GB＋swap）、Ubuntu 24.04 LTS、台灣／東京／新加坡
+- 🔲 **沒有 fail2ban**：已經只允許金鑰登入，暴力猜密碼不會成功；log 會比較多但不影響安全。需要的話之後再加
+- 🔲 **SSH 沒有換 port**：換 port 只能減少 log 裡的掃描紀錄，不增加安全性，還要多記一個 port
+- 🔲 雲端廠商的防火牆（Security Group）依廠商不同，指南只提醒「也設定成只開 22、80、443」
