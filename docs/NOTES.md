@@ -645,4 +645,6 @@ F02～F06 做頁面時已經有載入中（骨架畫面）、錯誤、空狀態�
 - ℹ️ 本機用 `actionlint` 檢查過 workflow 語法；compose config、`nginx -t` 兩個步驟也在本機模擬過
 - 🔲 **還沒設定「CI 沒過不能合併」**：要在 GitHub repo → Settings → Branches → Add branch protection rule（`main`）→ 勾選 Require status checks to pass，選這三個 job。這是 repo 設定，需要你自己在網頁上勾
 - 🔲 **沒有自動部署**（PLAN 寫「之後可加」）：主機（D01）還沒準備好。之後可以在 main 通過 CI 後，用 SSH 連到主機執行 D03 的更新指令；或在 CI 建好映像檔推到 GitHub Container Registry，主機只負責下載（比在 2GB 主機上建置快很多）
-- 🔲 **action 用大版本標籤**（`@v4`）而不是固定的 commit SHA：比較好讀、會自動拿到修正版；代價是理論上 action 被竄改時會受影響。這個專案只用 GitHub 官方的 action，風險低
+- ℹ️ **第一次執行的實際結果**：三個 job 約 1.5 分鐘全部通過；log 確認 `Tests run: 287, Failures: 0`、`No active profile set`（沒有載入測試資料）。推新 commit 時舊的執行被自動取消（concurrency 有效）
+- ℹ️ 第一次執行時 GitHub 警告 `actions/checkout@v4`、`setup-java@v4` 用的 Node.js 20 已淘汰，改成 `@v5`（Node.js 24）
+- 🔲 **action 用大版本標籤**（`@v5`）而不是固定的 commit SHA：比較好讀、會自動拿到修正版；代價是理論上 action 被竄改時會受影響。這個專案只用 GitHub 官方的 action，風險低

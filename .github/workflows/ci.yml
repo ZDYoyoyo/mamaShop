@@ -60,9 +60,9 @@ jobs:
         working-directory: backend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
@@ -79,7 +79,7 @@ jobs:
       # 測試失敗時上傳報告，可以在 Actions 頁面下載來看詳細的錯誤
       - name: 上傳測試報告（失敗時）
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: surefire-reports
           path: backend/target/surefire-reports/
@@ -95,9 +95,9 @@ jobs:
         working-directory: frontend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           # 快取 npm 下載的套件
@@ -126,7 +126,7 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # 用範本加上假的密碼檢查 docker-compose.prod.yml 的語法與必填變數（不會啟動任何東西）
       - name: 檢查 docker-compose.prod.yml
