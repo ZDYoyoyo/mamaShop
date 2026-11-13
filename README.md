@@ -34,7 +34,7 @@ mamaShop/
 cp .env.example .env
 
 # 2. 啟動 PostgreSQL
-docker compose up -d db redis
+docker compose up -d db redis rabbitmq mailpit
 
 # 3. 啟動後端（http://localhost:8080）
 cd backend && ./mvnw spring-boot:run
@@ -42,7 +42,7 @@ cd backend && ./mvnw spring-boot:run
 
 後端測試需要資料庫在執行中：`cd backend && ./mvnw test`
 
-啟動時會依 `.env` 的 `ADMIN_EMAIL`／`ADMIN_PASSWORD` 建立預設管理員（已存在則略過）。`.env` 設定 `APP_PROFILE=dev` 時會自動載入測試商品。想把本機資料庫清空重建：`docker compose down -v`（`-v` 會刪除資料庫的 volume），再重新 `docker compose up -d db redis`。Redis 是商品快取（R01），沒啟動網站也能用，但快取的測試需要它。
+啟動時會依 `.env` 的 `ADMIN_EMAIL`／`ADMIN_PASSWORD` 建立預設管理員（已存在則略過）。`.env` 設定 `APP_PROFILE=dev` 時會自動載入測試商品。想把本機資料庫清空重建：`docker compose down -v`（`-v` 會刪除資料庫的 volume），再重新 `docker compose up -d db redis`。Redis 是商品快取（R01），沒啟動網站也能用，但快取的測試需要它。RabbitMQ、Mailpit 是訂單通知（M01）：寄出的信在 http://localhost:8025 看（不會真的寄出），RabbitMQ 的管理介面在 http://localhost:15672。
 
 ### 用 Docker 啟動整套服務
 

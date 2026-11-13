@@ -1,7 +1,7 @@
 # 本機開發用。正式環境的設定放在 deploy/（D03）。
 #
 # 只啟動資料庫與 Redis（後端用 mvnw spring-boot:run 在本機跑，改程式比較方便）：
-#   docker compose up -d db redis
+#   docker compose up -d db redis rabbitmq mailpit
 # 啟動整套服務（資料庫＋後端，都在容器裡）：
 #   docker compose up --build
 #
@@ -43,6 +43,33 @@ services:
       timeout: 3s
       retries: 10
 
+  # 訂單通知的佇列（M01）。管理介面：http://localhost:15672（帳號密碼同 .env 的 RABBITMQ_USERNAME／PASSWORD）
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-mamashop}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?請在 .env 設定 RABBITMQ_PASSWORD}
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      # 佇列裡還沒處理的訊息存在這裡，重開 RabbitMQ 也不會不見
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # 假的寄信伺服器（M01）：後端寄出的信都會被它收下，在 http://localhost:8025 看，不會真的寄給任何人
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+
   backend:
     build: ./backend
     restart: unless-stopped
@@ -65,6 +92,12 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       APP_PROFILE: ${APP_PROFILE:-}
       REDIS_HOST: redis
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-mamashop}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      SITE_URL: ${SITE_URL:-http://localhost:5173}
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
@@ -74,3 +107,4 @@ services:
 volumes:
   db-data:
   uploads-data:
+  rabbitmq-data:

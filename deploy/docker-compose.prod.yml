@@ -10,6 +10,7 @@
 # 和本機開發的 docker-compose.yml 的差別：
 #   - 多了 web（Nginx）：提供前端網頁，並把 /api 轉給後端
 #   - redis：商品快取（R01）
+#   - rabbitmq：訂單通知的佇列（M01）
 #   - 對外只開 web 的 80 port；資料庫、後端「完全不寫 ports」，只有 Docker 內部網路連得到
 #     （Docker 公開的 port 會繞過 ufw 防火牆，見 docs/deploy/D01-server.md）
 #   - 不載入測試資料、不開 API 文件
@@ -60,6 +61,24 @@ services:
       timeout: 3s
       retries: 3
 
+  # 訂單通知的佇列（M01）：沒有 ports，只有後端連得到；不裝管理介面（正式環境不需要開網頁介面）
+  rabbitmq:
+    <<: *logging
+    image: rabbitmq:4.1-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-mamashop}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?請在 deploy/.env 設定 RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # RabbitMQ（Erlang）預設會用很多記憶體；限制 256MB，2GB 的主機才不會被它吃光
+    mem_limit: 256m
+
   backend:
     <<: *logging
     build: ../backend
@@ -70,8 +89,23 @@ services:
       # Redis 只是快取：沒有它網站也能運作（直接查資料庫），所以只等它「啟動」，不等健康檢查
       redis:
         condition: service_started
+      # 通知用：沒有它網站照常運作（通知會遺失），所以也只等它「啟動」
+      rabbitmq:
+        condition: service_started
     environment:
       REDIS_HOST: redis
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-mamashop}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      # 寄信（M01）。MAIL_HOST 空白時不寄信、只記 log（還沒選好寄信服務時）
+      SITE_URL: ${SITE_URL}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-true}
+      MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS:-true}
+      MAIL_FROM: ${MAIL_FROM:-}
       DB_HOST: db
       DB_PORT: 5432
       DB_NAME: ${DB_NAME}
@@ -134,3 +168,4 @@ services:
 volumes:
   db-data:
   uploads-data:
+  rabbitmq-data:

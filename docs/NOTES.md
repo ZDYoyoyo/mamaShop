@@ -816,3 +816,63 @@ F02～F06 做頁面時已經有載入中（骨架畫面）、錯誤、空狀態�
 - ℹ️ **Redis 掛掉時暫停活動**（fail-closed），和 R01、R02 的「照常運作」相反：R01、R02 的 Redis 是加速／額外保護，R03 的 Redis 是撐住搶購的核心
 - ℹ️ 文件最後有實作時的任務拆分、驗證方式（含 B08 與 R03 的壓測對照）、面試問答
 - ℹ️ 前面已經處理過的併發：B08 條件更新扣庫存＋依 id 排序避免死結（併發測試）、A02 庫存只送增減量、B10 樂觀鎖、R01 快取擋讀取、R02 原子認領防重複下單
+
+---
+
+# 第 6 階段：RabbitMQ
+
+## M01 訂單通知（RabbitMQ＋Email）
+
+### 流程
+
+```
+下單／確認／出貨（交易中）
+  └─ ApplicationEventPublisher.publishEvent(OrderEvent)         ← 訂單模組只發事件，不知道誰處理
+        │ 交易 commit 之後（@TransactionalEventListener，rollback 就不會發生）
+        ▼
+OrderNotificationPublisher（@Async，另一個執行緒）
+  └─ RabbitTemplate → exchange mamashop.orders（topic）、routing key order.created／confirmed／shipped
+        │ binding order.*
+        ▼
+queue mamashop.order-notifications（durable）
+        ▼
+OrderNotificationListener（@RabbitListener）→ 查最新的訂單 → OrderEmailComposer 組信 → JavaMailSender 寄出
+```
+
+| 事件 | 主旨 | 內容 |
+|---|---|---|
+| 下單 | 訂單已成立 | 品項、金額、運送方式、「確認後會再通知」 |
+| 確認 | 訂單已確認，正在備貨 | 同上 |
+| 出貨 | 訂單已出貨 | 物流單號、取件提醒（超商 7 天內取件付款） |
+
+### 設計（和傳統做法的差別）
+
+- ℹ️ **訂單模組只發「領域事件」**（`order/event/OrderEvent`），不依賴 RabbitMQ、Email；notification 模組聽事件。依賴是單向的（notification → order），之後加簡訊、LINE 通知，訂單的程式不用改
+- ℹ️ **`@TransactionalEventListener`（AFTER_COMMIT）**：在交易裡發的事件，等 commit 之後才處理。下單失敗 rollback 就不會收到 → 不會寄出「訂單成立」卻查不到訂單。傳統做法常在 Service 最後直接呼叫寄信，交易還沒 commit、甚至之後 rollback，信已經寄出去了
+- ℹ️ **`@Async` 送進 RabbitMQ**：顧客不用等。實測 RabbitMQ 停掉時下單仍然 41 ms 完成
+- ℹ️ **訊息只放訂單編號與事件種類**（JSON），寄信時再查資料庫：拿到最新資料、訊息小、不含個資
+- ℹ️ **Exchange／Queue／Binding 用 Bean 宣告**，後端啟動時自動建立；topic exchange 讓之後新增消費者（例如出貨通知物流）只要新增 queue 綁定，生產者不用改
+- ℹ️ **信件不放收件地址、電話**（信可能被轉寄），只放品項、金額、物流單號與「查看訂單」連結（要登入）
+- ⚠️ **JavaMail 的連線／讀取逾時預設是無限**：寄信伺服器卡住時，消費者執行緒永遠卡住、之後的信都寄不出去。設定 5 秒
+- ℹ️ **`MAIL_HOST` 空白時不寄信、只記 log**：上線初期還沒選好寄信服務也能運作
+- ℹ️ **RabbitMQ、寄信伺服器都排除在健康檢查之外**：通知掛了網站照常運作（同 R01 的 Redis）
+- ℹ️ RabbitMQ 連線逾時 2 秒；正式環境 RabbitMQ 記憶體上限 256MB、沒有 ports、不裝管理介面；本機用 management 版本，管理介面 http://localhost:15672
+
+### 已知的缺口（M03、之後處理）
+
+- ⚠️ **寄信失敗的信就這樣不見了**：設定 `default-requeue-rejected=false`，失敗的訊息不放回佇列（否則同一封信無限重試、一直失敗、佔住消費者）。實測：寄信伺服器停掉時確認訂單成功，那封信的訊息被丟掉（佇列 0 筆），log 有 `MailSendException`。**M03 加上「重試幾次、還是失敗就放到失敗佇列」**
+- ⚠️ **RabbitMQ 連不上時，那一則通知遺失**（只記 log）。實測：RabbitMQ 停掉時下單成功、log 有「送不進 RabbitMQ」；RabbitMQ 恢復後消費者自動重新連線，之後的信正常寄出。要完全避免得用 **Outbox 模式**（訊息和訂單寫在同一個交易的 outbox 表，再由排程送出），家庭小店的規模先記下來
+- ⚠️ commit 之後、`@Async` 執行之前後端當機：同上，通知遺失
+- 🔲 **正式環境的寄信服務還沒選**：需要有寄信額度、能設定 SPF／DKIM（不然信會進垃圾郵件）。例如 Gmail（應用程式密碼，每天約 500 封）、Brevo、Amazon SES、Resend。選好後填 `deploy/.env` 的 `MAIL_*`，並在 D08 實際寄一封確認
+- 🔲 取消、退回、送達沒有通知（PLAN 只要求下單、確認、出貨）；只有純文字信，沒有 HTML 版型
+- 🔲 管理員沒有「新訂單」通知（家人要開後台看 A05 的待確認數量）
+
+### 測試
+
+- ℹ️ `OrderEmailComposerTest`（3 個）：主旨、內容、金額格式、台灣時間、**不含地址電話**
+- ℹ️ `OrderNotificationIntegrationTest`（真的 RabbitMQ、寄信換成 Mockito）：下單 → 確認 → 出貨各寄一封，收件人、主旨、物流單號正確；**下單失敗（rollback）不寄信**。非同步用 Mockito 的 `timeout()` 等待，不用固定的 sleep
+- ℹ️ `OrderNotificationRabbitDownTest`：RabbitMQ 連不到時下單成功、1.5 秒內完成
+- ℹ️ `OrderServiceTest`、`AdminOrderServiceTest`：建立、確認、出貨會發出對應的事件；庫存不足、取消不發
+- ℹ️ 測試預設關閉通知（`app.notification.enabled=false`、消費者不啟動），避免每個測試的訂單都送進佇列、被別的測試拿到
+- ℹ️ CI 的後端 job 加上 RabbitMQ service。後端 325 個測試全部通過
+- ℹ️ 實測（本機 compose＋Mailpit）：下單、確認、出貨，Mailpit 收到 3 封，中文與版面正確；下單回應 278 ms（不用等寄信）

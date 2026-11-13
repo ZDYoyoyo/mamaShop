@@ -13,6 +13,8 @@ import com.mamashop.order.entity.OrderStatus;
 import com.mamashop.order.entity.OrderStatusHistory;
 import com.mamashop.order.entity.PaymentMethod;
 import com.mamashop.order.entity.PaymentStatus;
+import com.mamashop.order.event.OrderEvent;
+import com.mamashop.order.event.OrderEventType;
 import com.mamashop.order.repository.OrderRepository;
 import com.mamashop.order.repository.OrderStatusHistoryRepository;
 import com.mamashop.product.entity.Product;
@@ -29,6 +31,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -65,6 +68,7 @@ public class OrderService {
     private final UserRepository userRepository;
     private final OrderNumberGenerator orderNumberGenerator;
     private final OrderStockService orderStockService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public OrderService(ProductRepository productRepository,
                         ShippingMethodRepository shippingMethodRepository,
@@ -72,7 +76,8 @@ public class OrderService {
                         OrderStatusHistoryRepository historyRepository,
                         UserRepository userRepository,
                         OrderNumberGenerator orderNumberGenerator,
-                        OrderStockService orderStockService) {
+                        OrderStockService orderStockService,
+                        ApplicationEventPublisher eventPublisher) {
         this.productRepository = productRepository;
         this.shippingMethodRepository = shippingMethodRepository;
         this.orderRepository = orderRepository;
@@ -80,6 +85,7 @@ public class OrderService {
         this.userRepository = userRepository;
         this.orderNumberGenerator = orderNumberGenerator;
         this.orderStockService = orderStockService;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -151,6 +157,8 @@ public class OrderService {
         orderRepository.save(order); // cascade 會一起 INSERT 所有明細
 
         historyRepository.save(new OrderStatusHistory(order, null, OrderStatus.PENDING_CONFIRM, customer, "顧客下單"));
+        // 通知顧客（M01）：事件在交易 commit 之後才會被處理，下單失敗 rollback 就不會寄信
+        eventPublisher.publishEvent(new OrderEvent(order.getOrderNo(), OrderEventType.CREATED));
 
         return OrderDetailResponse.from(order);
     }

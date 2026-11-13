@@ -14,6 +14,8 @@ import com.mamashop.order.entity.Order;
 import com.mamashop.order.entity.OrderStatus;
 import com.mamashop.order.entity.OrderStatusHistory;
 import com.mamashop.order.entity.PaymentStatus;
+import com.mamashop.order.event.OrderEvent;
+import com.mamashop.order.event.OrderEventType;
 import com.mamashop.order.repository.OrderRepository;
 import com.mamashop.order.repository.OrderStatusHistoryRepository;
 import com.mamashop.user.entity.Role;
@@ -28,6 +30,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /** AdminOrderService 單元測試：版本號比對、付款狀態、退回是否歸還庫存。 */
@@ -40,6 +43,7 @@ class AdminOrderServiceTest {
     @Mock private OrderStatusHistoryRepository historyRepository;
     @Mock private UserRepository userRepository;
     @Mock private OrderStockService orderStockService;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks private AdminOrderService adminOrderService;
 
@@ -91,6 +95,8 @@ class AdminOrderServiceTest {
         verify(historyRepository).save(history.capture());
         assertThat(history.getValue().getOperator()).isSameAs(admin);
         assertThat(history.getValue().getNote()).isEqualTo("顧客來電取消");
+        // 取消目前不寄信（M01 只通知下單、確認、出貨）
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
@@ -103,6 +109,18 @@ class AdminOrderServiceTest {
         assertThat(result.order().trackingNo()).isEqualTo("9988776655");
         assertThat(result.order().shippedAt()).isNotNull();
         verifyNoInteractions(orderStockService);
+        // 通知顧客已出貨（M01）
+        verify(eventPublisher).publishEvent(new OrderEvent("M1", OrderEventType.SHIPPED));
+    }
+
+    @Test
+    void confirm_publishesEventForNotification() {
+        Order order = order(OrderStatus.PENDING_CONFIRM, 0);
+        stubAction(order);
+
+        adminOrderService.confirm("M1", 0, ADMIN_ID, null);
+
+        verify(eventPublisher).publishEvent(new OrderEvent("M1", OrderEventType.CONFIRMED));
     }
 
     @Test

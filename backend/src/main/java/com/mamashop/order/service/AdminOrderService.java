@@ -13,11 +13,14 @@ import com.mamashop.order.entity.Order;
 import com.mamashop.order.entity.OrderStatus;
 import com.mamashop.order.entity.OrderStatusHistory;
 import com.mamashop.order.entity.PaymentStatus;
+import com.mamashop.order.event.OrderEvent;
+import com.mamashop.order.event.OrderEventType;
 import com.mamashop.order.repository.OrderRepository;
 import com.mamashop.order.repository.OrderStatusHistoryRepository;
 import com.mamashop.shipping.entity.ShippingMethodCode;
 import com.mamashop.user.repository.UserRepository;
 import java.time.Instant;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -52,13 +55,16 @@ public class AdminOrderService {
     private final OrderStatusHistoryRepository historyRepository;
     private final UserRepository userRepository;
     private final OrderStockService orderStockService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public AdminOrderService(OrderRepository orderRepository, OrderStatusHistoryRepository historyRepository,
-                             UserRepository userRepository, OrderStockService orderStockService) {
+                             UserRepository userRepository, OrderStockService orderStockService,
+                             ApplicationEventPublisher eventPublisher) {
         this.orderRepository = orderRepository;
         this.historyRepository = historyRepository;
         this.userRepository = userRepository;
         this.orderStockService = orderStockService;
+        this.eventPublisher = eventPublisher;
     }
 
     // ===== 查詢 =====
@@ -90,6 +96,8 @@ public class AdminOrderService {
     public AdminOrderDetailResponse confirm(String orderNo, long version, Long adminId, String note) {
         Order order = loadForUpdate(orderNo, version);
         changeStatus(order, OrderStatus.PROCESSING, adminId, note);
+        // 通知顧客（M01），交易 commit 後才寄
+        eventPublisher.publishEvent(new OrderEvent(orderNo, OrderEventType.CONFIRMED));
         return toDetail(order);
     }
 
@@ -99,6 +107,7 @@ public class AdminOrderService {
         Order order = loadForUpdate(orderNo, version);
         order.setTrackingNo(trackingNo);
         changeStatus(order, OrderStatus.SHIPPED, adminId, note);
+        eventPublisher.publishEvent(new OrderEvent(orderNo, OrderEventType.SHIPPED));
         return toDetail(order);
     }
 
