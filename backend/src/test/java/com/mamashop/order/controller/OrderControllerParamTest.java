@@ -12,7 +12,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.mamashop.order.service.AdminOrderService;
+import com.mamashop.order.service.CheckoutTokenService;
 import com.mamashop.order.service.OrderService;
+import com.mamashop.order.service.OrderSubmissionService;
 import com.mamashop.security.AuthUser;
 import com.mamashop.user.entity.Role;
 import org.junit.jupiter.api.AfterEach;
@@ -41,6 +43,8 @@ class OrderControllerParamTest {
     @Autowired private MockMvc mockMvc;
     @MockitoBean private OrderService orderService;
     @MockitoBean private AdminOrderService adminOrderService;
+    @MockitoBean private OrderSubmissionService orderSubmissionService;
+    @MockitoBean private CheckoutTokenService checkoutTokenService;
 
     // ===== 顧客 =====
 

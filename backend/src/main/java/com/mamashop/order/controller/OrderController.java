@@ -3,10 +3,13 @@ package com.mamashop.order.controller;
 import com.mamashop.common.config.OpenApiConfig;
 import com.mamashop.common.response.ApiResponse;
 import com.mamashop.common.response.PageResponse;
+import com.mamashop.order.dto.CheckoutTokenResponse;
 import com.mamashop.order.dto.CreateOrderRequest;
 import com.mamashop.order.dto.OrderDetailResponse;
 import com.mamashop.order.dto.OrderSummaryResponse;
+import com.mamashop.order.service.CheckoutTokenService;
 import com.mamashop.order.service.OrderService;
+import com.mamashop.order.service.OrderSubmissionService;
 import com.mamashop.security.AuthUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -16,14 +19,15 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -36,19 +40,41 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/orders")
 public class OrderController {
 
-    private final OrderService orderService;
+    /** 防重複下單的 header 名稱（業界常用的名稱，例如 Stripe 的 API） */
+    public static final String IDEMPOTENCY_KEY = "Idempotency-Key";
 
-    public OrderController(OrderService orderService) {
+    private final OrderService orderService;
+    private final OrderSubmissionService orderSubmissionService;
+    private final CheckoutTokenService checkoutTokenService;
+
+    public OrderController(OrderService orderService, OrderSubmissionService orderSubmissionService,
+                           CheckoutTokenService checkoutTokenService) {
         this.orderService = orderService;
+        this.orderSubmissionService = orderSubmissionService;
+        this.checkoutTokenService = checkoutTokenService;
     }
 
-    /** 建立訂單（結帳）。成功回 201 與訂單明細。 */
-    @Operation(summary = "建立訂單（結帳）")
+    /** 進入結帳頁時取得一次性識別碼（R02），送出訂單時放在 Idempotency-Key header */
+    @Operation(summary = "取得結帳用的一次性識別碼（防重複下單）")
+    @PostMapping("/checkout-token")
+    public ApiResponse<CheckoutTokenResponse> checkoutToken(@AuthenticationPrincipal AuthUser authUser) {
+        return ApiResponse.ok(new CheckoutTokenResponse(
+                checkoutTokenService.issue(authUser.id()), CheckoutTokenService.TTL.toSeconds()));
+    }
+
+    /**
+     * 建立訂單（結帳）。header 要帶 Idempotency-Key（上面取得的識別碼）。
+     * 新建立回 201；同一個識別碼已經下單成功過（網路重送、按兩次）回 200 和原本那筆訂單，不會重複建立。
+     */
+    @Operation(summary = "建立訂單（結帳）；同一個 Idempotency-Key 只會建立一筆")
     @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<OrderDetailResponse> create(@AuthenticationPrincipal AuthUser authUser,
-                                                   @Valid @RequestBody CreateOrderRequest request) {
-        return ApiResponse.ok(orderService.createOrder(authUser.id(), request));
+    public ResponseEntity<ApiResponse<OrderDetailResponse>> create(
+            @AuthenticationPrincipal AuthUser authUser,
+            @RequestHeader(name = IDEMPOTENCY_KEY, required = false) String idempotencyKey,
+            @Valid @RequestBody CreateOrderRequest request) {
+        OrderSubmissionService.Result result = orderSubmissionService.submit(authUser.id(), idempotencyKey, request);
+        return ResponseEntity.status(result.replayed() ? HttpStatus.OK : HttpStatus.CREATED)
+                .body(ApiResponse.ok(result.order()));
     }
 
     /** 我的訂單（新到舊） */

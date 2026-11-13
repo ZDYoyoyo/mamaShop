@@ -9,8 +9,20 @@ import http from './http'
  *                  shippingAddress?, cvsBrand?, cvsStoreCode?, cvsStoreName?, note? }
  * @returns 訂單明細（OrderDetailResponse）
  */
-export function createOrder(payload) {
-  return http.post('/orders', payload)
+/**
+ * 取得結帳用的一次性識別碼（R02）：進入結帳頁時拿一次，送出訂單時帶上。
+ * 回傳 { token, expiresInSeconds }
+ */
+export function getCheckoutToken() {
+  return http.post('/orders/checkout-token')
+}
+
+/**
+ * 建立訂單。checkoutToken 放在 Idempotency-Key header：
+ * 同一個識別碼不管送幾次（連點、網路重送），後端都只建立一筆訂單，重送時回傳原本那筆
+ */
+export function createOrder(payload, checkoutToken) {
+  return http.post('/orders', payload, { headers: { 'Idempotency-Key': checkoutToken } })
 }
 
 /** 訂單詳情（只能看自己的；別人的回 404） */

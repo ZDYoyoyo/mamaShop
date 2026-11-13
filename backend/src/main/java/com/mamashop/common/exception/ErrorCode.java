@@ -44,7 +44,11 @@ public enum ErrorCode {
     SHIPPING_METHOD_UNAVAILABLE(HttpStatus.CONFLICT, "此運送方式目前無法使用"),
     ORDER_AMOUNT_TOO_LARGE(HttpStatus.BAD_REQUEST, "訂單金額超過上限"),
     INVALID_ORDER_STATUS(HttpStatus.CONFLICT, "訂單目前的狀態不允許此操作"),
-    ORDER_CANNOT_CANCEL(HttpStatus.CONFLICT, "訂單已確認，無法自行取消，請聯絡賣家");
+    ORDER_CANNOT_CANCEL(HttpStatus.CONFLICT, "訂單已確認，無法自行取消，請聯絡賣家"),
+    // 防重複下單（R02）
+    ORDER_TOKEN_REQUIRED(HttpStatus.BAD_REQUEST, "缺少結帳識別碼，請重新整理結帳頁"),
+    ORDER_TOKEN_INVALID(HttpStatus.CONFLICT, "結帳頁已過期，請再按一次「確認下單」"),
+    ORDER_IN_PROGRESS(HttpStatus.CONFLICT, "訂單正在處理中，請稍候到「我的訂單」確認，不要重複送出");
 
     private final HttpStatus status;
     private final String defaultMessage;

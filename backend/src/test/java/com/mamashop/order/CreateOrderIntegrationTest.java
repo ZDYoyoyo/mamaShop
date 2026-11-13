@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import com.mamashop.category.repository.CategoryRepository;
+import com.mamashop.order.controller.OrderController;
+import com.mamashop.order.service.CheckoutTokenService;
 import com.mamashop.product.entity.Product;
 import com.mamashop.product.entity.ProductStatus;
 import com.mamashop.product.repository.ProductRepository;
@@ -47,6 +49,7 @@ class CreateOrderIntegrationTest {
     @Autowired private ProductRepository productRepository;
     @Autowired private ShippingMethodRepository shippingMethodRepository;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private CheckoutTokenService checkoutTokenService;
 
     private OrderTestData data;
     private String token;
@@ -272,9 +275,11 @@ class CreateOrderIntegrationTest {
 
     // ===== helpers =====
 
+    /** 每次都拿新的結帳識別碼（R02），就像每次進入結帳頁 */
     private ResultActions placeOrder(String json) throws Exception {
         return mockMvc.perform(post("/api/orders")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .header(OrderController.IDEMPOTENCY_KEY, checkoutTokenService.issue(data.user().getId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json));
     }

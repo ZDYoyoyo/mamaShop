@@ -84,7 +84,8 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(corsProperties.allowedOrigins());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        // Idempotency-Key：防重複下單（R02）
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key"));
         // token 放在 header 不是 cookie，所以不需要 allowCredentials
         config.setMaxAge(3600L);
 
