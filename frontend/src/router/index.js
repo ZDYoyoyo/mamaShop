@@ -90,6 +90,18 @@ export const routes = [
         component: () => import('@/views/admin/AdminHomeView.vue'),
       },
       {
+        path: 'orders',
+        name: 'admin-orders',
+        component: () => import('@/views/admin/AdminOrdersView.vue'),
+      },
+      {
+        path: 'orders/:orderNo',
+        name: 'admin-order-detail',
+        component: () => import('@/views/admin/AdminOrderDetailView.vue'),
+        props: true,
+        meta: { menu: 'admin-orders' },
+      },
+      {
         path: 'products',
         name: 'admin-products',
         component: () => import('@/views/admin/AdminProductsView.vue'),
