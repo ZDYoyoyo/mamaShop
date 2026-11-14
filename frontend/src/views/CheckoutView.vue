@@ -3,13 +3,14 @@
  * 結帳頁（需要登入）：確認商品 → 選運送方式 → 填收件資訊 → 送出（貨到付款）。
  *
  * - 金額只是「預估」給顧客看，實際金額由後端用最新的價格與運費計算（B08）
- * - 送出時停用按鈕：連點兩下不會建立兩筆訂單（後端的一次性 token 在 R02）
+ * - 防重複下單有兩層：送出時停用按鈕（前端），以及進入頁面時取得的一次性識別碼（後端，R02）。
+ *   同一個識別碼不管送幾次都只會建立一筆訂單（網路不穩重送、按鈕沒擋住的連點）
  * - 成功後移除已下單的品項，導向訂單完成頁
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getShippingMethods } from '@/api/catalog'
-import { createOrder } from '@/api/orders'
+import { createOrder, getCheckoutToken } from '@/api/orders'
 import LoadError from '@/components/LoadError.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
@@ -25,6 +26,8 @@ const loading = ref(true)
 const loadError = ref('')
 const shippingMethods = ref([])
 const notices = ref([])
+/** 這次結帳的一次性識別碼（R02） */
+const checkoutToken = ref('')
 
 const formRef = ref()
 const form = reactive({
@@ -68,7 +71,8 @@ async function load() {
   loadError.value = ''
   try {
     // 同時更新購物車（價格、庫存可能變了）與取得運送方式
-    const [cartNotices, methods] = await Promise.all([cart.refresh(), getShippingMethods()])
+    const [cartNotices, methods, token] = await Promise.all([cart.refresh(), getShippingMethods(), getCheckoutToken()])
+    checkoutToken.value = token.token
     notices.value = cartNotices
     shippingMethods.value = methods
     if (methods.length > 0 && !form.shippingMethod) form.shippingMethod = methods[0].code
@@ -112,11 +116,16 @@ async function submit() {
       cvsStoreCode: isCvsPickup.value ? form.cvsStoreCode : null,
       cvsStoreName: isCvsPickup.value ? form.cvsStoreName : null,
       note: form.note || null,
-    })
+    }, checkoutToken.value)
     cart.removeItems(orderedItems.map((item) => item.productId))
     router.replace({ name: 'checkout-complete', params: { orderNo: order.orderNo } })
   } catch (e) {
-    if (['INSUFFICIENT_STOCK', 'PRODUCT_UNAVAILABLE'].includes(e.code)) {
+    if (['ORDER_TOKEN_INVALID', 'ORDER_TOKEN_REQUIRED'].includes(e.code)) {
+      // 識別碼過期（結帳頁開太久）：換一個新的，請顧客再按一次。
+      // 舊的識別碼從來沒有成功下單過，所以換新的再送不會重複
+      submitError.value = e.message
+      await refreshCheckoutToken()
+    } else if (['INSUFFICIENT_STOCK', 'PRODUCT_UNAVAILABLE'].includes(e.code)) {
       // 下單的瞬間被別人買走了：更新購物車，讓顧客看到最新庫存
       submitError.value = `${e.message}。購物車已更新，請確認後再送出。`
       notices.value = await cart.refresh()
@@ -128,6 +137,14 @@ async function submit() {
     }
   } finally {
     submitting.value = false
+  }
+}
+
+async function refreshCheckoutToken() {
+  try {
+    checkoutToken.value = (await getCheckoutToken()).token
+  } catch {
+    // 換不到也沒關係：下次送出時後端會再提示
   }
 }
 </script>

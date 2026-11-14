@@ -80,6 +80,7 @@ class AccessControlTest {
                 // ===== 登入即可 =====
                 e("GET", "/api/users/me", Access.LOGGED_IN),
                 e("POST", "/api/orders", Access.LOGGED_IN),
+                e("POST", "/api/orders/checkout-token", Access.LOGGED_IN),
                 e("GET", "/api/orders", Access.LOGGED_IN),
                 e("GET", "/api/orders/{orderNo}", Access.LOGGED_IN),
                 e("POST", "/api/orders/{orderNo}/cancel", Access.LOGGED_IN),

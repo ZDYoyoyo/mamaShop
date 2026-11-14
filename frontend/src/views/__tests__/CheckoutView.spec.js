@@ -4,10 +4,10 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
 
 vi.mock('@/api/catalog', () => ({ getProduct: vi.fn(), getShippingMethods: vi.fn() }))
-vi.mock('@/api/orders', () => ({ createOrder: vi.fn(), getOrder: vi.fn() }))
+vi.mock('@/api/orders', () => ({ createOrder: vi.fn(), getOrder: vi.fn(), getCheckoutToken: vi.fn() }))
 
 import { getProduct, getShippingMethods } from '@/api/catalog'
-import { createOrder } from '@/api/orders'
+import { createOrder, getCheckoutToken } from '@/api/orders'
 import { ApiError } from '@/api/http'
 import { routes } from '@/router'
 import { useAuthStore } from '@/stores/auth'
@@ -45,6 +45,8 @@ describe('CheckoutView', () => {
     vi.mocked(getShippingMethods).mockResolvedValue(METHODS)
     vi.mocked(createOrder).mockReset()
     vi.mocked(createOrder).mockResolvedValue({ orderNo: 'M2611120000000001' })
+    vi.mocked(getCheckoutToken).mockReset()
+    vi.mocked(getCheckoutToken).mockResolvedValue({ token: 'token-1', expiresInSeconds: 1800 })
   })
 
   it('購物車是空的時候回購物車頁', async () => {
@@ -90,7 +92,7 @@ describe('CheckoutView', () => {
       cvsStoreCode: null,
       cvsStoreName: null,
       note: null,
-    })
+    }, 'token-1') // 進入結帳頁時取得的一次性識別碼（R02）
     expect(cart.items).toEqual([])
   })
 
@@ -152,6 +154,41 @@ describe('CheckoutView', () => {
     await vi.waitFor(() => expect(wrapper.text()).toContain('庫存不足，目前剩 1 件。購物車已更新'))
     expect(cart.items[0].quantity).toBe(1)
     expect(router.currentRoute.value.name).toBe('checkout')
+  })
+
+  it('結帳識別碼過期：自動換新的，再按一次就用新的送出（R02）', async () => {
+    useCartStore().addItem(tote, 1)
+    const { wrapper, router } = await mountCheckout()
+    vi.mocked(getCheckoutToken).mockResolvedValue({ token: 'token-2', expiresInSeconds: 1800 })
+    vi.mocked(createOrder)
+      .mockRejectedValueOnce(new ApiError({ status: 409, code: 'ORDER_TOKEN_INVALID', message: '結帳頁已過期，請再按一次「確認下單」' }))
+      .mockResolvedValueOnce({ orderNo: 'M2611120000000002' })
+    await input(wrapper, '收件地址').setValue('台北市')
+
+    await wrapper.find('form').trigger('submit')
+    await vi.waitFor(() => expect(wrapper.text()).toContain('結帳頁已過期'))
+    expect(router.currentRoute.value.name).toBe('checkout')
+
+    await wrapper.find('form').trigger('submit')
+    await vi.waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/checkout/complete/M2611120000000002'))
+    expect(vi.mocked(createOrder).mock.calls.map((call) => call[1])).toEqual(['token-1', 'token-2'])
+  })
+
+  it('其他失敗（例如庫存不足）後再送出，沿用同一個識別碼（後端已經還原）', async () => {
+    useCartStore().addItem(tote, 1)
+    const { wrapper } = await mountCheckout()
+    vi.mocked(createOrder)
+      .mockRejectedValueOnce(new ApiError({ status: 409, code: 'INSUFFICIENT_STOCK', message: '庫存不足' }))
+      .mockResolvedValueOnce({ orderNo: 'M2611120000000003' })
+    await input(wrapper, '收件地址').setValue('台北市')
+
+    await wrapper.find('form').trigger('submit')
+    await vi.waitFor(() => expect(wrapper.text()).toContain('庫存不足'))
+    await wrapper.find('form').trigger('submit')
+    await vi.waitFor(() => expect(createOrder).toHaveBeenCalledTimes(2))
+
+    expect(vi.mocked(createOrder).mock.calls.map((call) => call[1])).toEqual(['token-1', 'token-1'])
+    expect(getCheckoutToken).toHaveBeenCalledTimes(1)
   })
 })
 
