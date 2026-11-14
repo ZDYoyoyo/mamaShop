@@ -9,8 +9,9 @@
 #
 # 和本機開發的 docker-compose.yml 的差別：
 #   - 多了 web（Nginx）：提供前端網頁，並把 /api 轉給後端
-#   - redis：商品快取（R01）
-#   - rabbitmq：訂單通知的佇列（M01）
+#   - redis：商品快取（R01）、防重複下單（R02）
+#   - rabbitmq：訂單通知信（M01）、延遲任務（M02 自動完成、P01 逾時未付款取消）、失敗佇列（M03）
+#   - 沒有 mailpit（本機的假寄信伺服器）：寄信用 MAIL_* 設定的真實寄信服務
 #   - 對外只開 web 的 80 port；資料庫、後端「完全不寫 ports」，只有 Docker 內部網路連得到
 #     （Docker 公開的 port 會繞過 ufw 防火牆，見 docs/deploy/D01-server.md）
 #   - 不載入測試資料、不開 API 文件

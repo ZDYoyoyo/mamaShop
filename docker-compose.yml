@@ -1,8 +1,12 @@
 # 本機開發用。正式環境的設定放在 deploy/（D03）。
 #
-# 只啟動資料庫與 Redis（後端用 mvnw spring-boot:run 在本機跑，改程式比較方便）：
+# 只啟動後端需要的服務（後端用 mvnw spring-boot:run 在本機跑，改程式比較方便）：
 #   docker compose up -d db redis rabbitmq mailpit
-# 啟動整套服務（資料庫＋後端，都在容器裡）：
+#     db        PostgreSQL
+#     redis     商品快取（R01）、防重複下單（R02）
+#     rabbitmq  訂單通知信（M01）、延遲任務（M02、P01）、失敗佇列（M03）
+#     mailpit   假的寄信伺服器：信不會真的寄出，在 http://localhost:8025 看
+# 啟動整套服務（上面四個＋後端，都在容器裡）：
 #   docker compose up --build
 #
 # 所有 ${...} 的值來自同目錄的 .env（docker compose 會自動讀取）。

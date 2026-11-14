@@ -20,7 +20,8 @@ import java.util.List;
  * <p>請求裡只有「商品 id＋數量」，沒有價格、沒有金額：
  * 價格一律以伺服器當下的資料為準，前端傳來的金額不可信（可以被竄改）。
  *
- * <p>{@link ValidShippingInfo}：依運送方式檢查必填欄位（宅配要地址、超商要門市），
+ * <p>{@link ValidShippingInfo}：依運送方式檢查必填欄位（宅配要地址、超商要門市；
+ * 超商取貨的收件人姓名還要符合超商的格式，P03），
  * 這種「欄位之間互相影響」的規則無法只用單一欄位的註解表達，所以寫成類別層級的驗證。
  */
 @ValidShippingInfo
@@ -42,7 +43,7 @@ public record CreateOrderRequest(
         @Size(max = 255)
         String shippingAddress,
 
-        /* 超商取貨必填（第 1 階段由顧客手動填寫門市） */
+        /* 超商取貨必填。門市由綠界電子地圖帶入（P02），沒開電子地圖時顧客手動填寫；兩種來源後端都用同一套規則檢查 */
         CvsBrand cvsBrand,
         @Size(max = 20) String cvsStoreCode,
         @Size(max = 50) String cvsStoreName,

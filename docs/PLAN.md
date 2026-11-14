@@ -75,8 +75,8 @@ mamaShop/
 - `recipient_name`、`recipient_phone`、`note`
 - `shipping_method`（`HOME_DELIVERY`／`CVS_PICKUP`）
 - 宅配：`shipping_address`
-- 超商取貨：`cvs_brand`（`SEVEN`／`FAMILY`／`HILIFE`／`OK`）、`cvs_store_code`、`cvs_store_name`（第 1 階段顧客手動填寫）
-- `payment_method`（`COD`；之後接金流再加 `ONLINE`）
+- 超商取貨：`cvs_brand`（`SEVEN`／`FAMILY`／`HILIFE`／`OK`）、`cvs_store_code`、`cvs_store_name`（第 1 階段顧客手動填寫）　→ P02 改用電子地圖選門市；OK 超商店到店已停止服務，新訂單不能選（P03）
+- `payment_method`（`COD`；之後接金流再加 `ONLINE`）　→ P01 已加上 `ONLINE`（`V3`）
 - `payment_status`（`UNPAID`／`PAID`／`REFUNDED`）
 - `status`（見下方訂單狀態）
 - `tracking_no`（物流單號）
@@ -87,6 +87,10 @@ mamaShop/
 
 **order_status_histories**：`id`、`order_id` FK、`from_status`、`to_status`、`operator_id` FK（顧客或管理員；系統自動處理時為 NULL）、`note`、`created_at`
 - 多位管理員一起管理，需要知道「誰在什麼時候把訂單改成什麼狀態」
+
+**第 7 階段新增的資料表**（原本的計畫沒有，實作時加的；設計理由見 `docs/NOTES.md` 的 P01、P03）
+- **payments**（P01，`V3`）：一張訂單的每一次付款嘗試。綠界的交易編號不能重複使用，顧客關掉付款頁再付一次就要新的編號，所以不是把付款欄位放在 `orders`
+- **shipments**（P03，`V4`）：綠界物流單（物流編號、寄件代碼、最新的物流狀態）
 
 **訂單狀態**
 
@@ -112,6 +116,11 @@ mamaShop/
 **設計理由**
 - `PENDING_CONFIRM`：貨到付款最常見的風險是惡意下單、棄單不取貨，先確認再出貨可以少寄冤枉貨
 - `DELIVERED`、`RETURNED`：超商取貨有「到店但沒來拿」的情況，讓這類訂單有地方歸類，也能統計棄單
+
+**實作後和上表不同的地方**（M02、P01、P03 加入自動處理之後）
+- 「觸發者」多了系統：`PENDING_PAYMENT` → `PROCESSING` 只有金流通知能做（管理員不能手動確認）；逾時未付款由系統取消；超商取貨的 `DELIVERED`、`COMPLETED`、`RETURNED` 會依綠界的物流通知自動更新；宅配送達 7 天自動 `COMPLETED`
+- 線上付款的訂單在付款成功時就是 `PAID`，「完成」不會再改付款時間
+- 已付款的訂單取消／退回時要退款：目前是後台提醒、到綠界後台人工退款，`REFUNDED` 還沒有使用
 
 > 面試重點：價格與運費快照、狀態機集中檢查（所有狀態轉換都經過同一個方法，例如 `OrderStatus.canTransitionTo()`）、取消時歸還庫存要和建立訂單一樣在交易內完成、樂觀鎖處理多人同時操作、狀態變更紀錄。
 

@@ -1,0 +1,4 @@
+# shell 腳本一律用 LF 換行。
+# Windows 的 Git 預設可能把文字檔轉成 CRLF；腳本帶著 CRLF 放到 Linux 主機或 Docker 裡執行會失敗
+# （錯誤訊息像是「/bin/bash^M: bad interpreter」）。backend/ 裡另外有一份，只管 mvnw。
+*.sh text eol=lf

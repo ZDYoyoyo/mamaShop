@@ -19,8 +19,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 超商電子地圖選門市（P02） */
-@Tag(name = "物流", description = "綠界超商電子地圖")
+/**
+ * 綠界物流的「非後台」API：結帳頁的電子地圖選門市（P02），以及綠界呼叫我們的兩個回呼
+ * （電子地圖選好門市、物流狀態通知 P03）。後台的建立物流單、列印寄件單在 {@link AdminShipmentController}。
+ *
+ * <p>兩個回呼都不用登入（綠界不會帶我們的 JWT），也不套用 CORS（見 SecurityConfig 的 CALLBACK_PATHS）：
+ * 電子地圖回傳只檢查格式、當成顧客自己填的資料；物流狀態通知用 MD5 簽章驗證。
+ */
+@Tag(name = "物流", description = "綠界超商電子地圖、物流狀態通知")
 @RestController
 public class LogisticsController {
 
