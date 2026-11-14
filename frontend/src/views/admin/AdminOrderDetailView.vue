@@ -105,6 +105,16 @@ function operatorText(history) {
       </el-tag>
     </div>
     <p class="muted">下單時間 {{ formatDateTime(order.createdAt) }}</p>
+    <!-- 線上付款（P01）：取消之後才付款成功（逾時取消和付款剛好同時）、或重複付款，錢要退給顧客 -->
+    <el-alert
+      v-if="order.paymentMethod === 'ONLINE' && order.paymentStatus === 'PAID' && ['CANCELLED', 'RETURNED'].includes(order.status)"
+      type="error"
+      :closable="false"
+      show-icon
+      title="這筆訂單已經收到線上付款，但訂單不會出貨：請到綠界廠商後台退款"
+      description="綠界交易編號在下方「狀態紀錄」的備註裡"
+      class="refund-alert"
+    />
 
     <!-- 操作：依目前狀態顯示；已完成、已取消、已退回沒有操作 -->
     <section v-if="actions.length" class="actions">
@@ -299,5 +309,8 @@ p {
   .actions :deep(.el-button) {
     flex: 1 1 40%;
   }
+}
+.refund-alert {
+  margin: 8px 0;
 }
 </style>

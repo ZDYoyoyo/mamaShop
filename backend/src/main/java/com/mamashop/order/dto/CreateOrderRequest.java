@@ -1,6 +1,7 @@
 package com.mamashop.order.dto;
 
 import com.mamashop.order.entity.CvsBrand;
+import com.mamashop.order.entity.PaymentMethod;
 import com.mamashop.shipping.entity.ShippingMethodCode;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -47,7 +48,18 @@ public record CreateOrderRequest(
         @Size(max = 50) String cvsStoreName,
 
         @Size(max = 500)
-        String note) {
+        String note,
+
+        /* 付款方式（P01）。沒有傳 = 貨到付款（舊版前端相容） */
+        PaymentMethod paymentMethod) {
+
+    /** 沒有指定付款方式（貨到付款） */
+    public CreateOrderRequest(List<Item> items, ShippingMethodCode shippingMethod, String recipientName,
+                              String recipientPhone, String shippingAddress, CvsBrand cvsBrand,
+                              String cvsStoreCode, String cvsStoreName, String note) {
+        this(items, shippingMethod, recipientName, recipientPhone, shippingAddress, cvsBrand,
+                cvsStoreCode, cvsStoreName, note, null);
+    }
 
     public CreateOrderRequest {
         recipientName = trim(recipientName);
@@ -56,6 +68,7 @@ public record CreateOrderRequest(
         cvsStoreCode = trim(cvsStoreCode);
         cvsStoreName = trim(cvsStoreName);
         note = trim(note);
+        paymentMethod = paymentMethod == null ? PaymentMethod.COD : paymentMethod;
     }
 
     /** 購物車的一個品項 */

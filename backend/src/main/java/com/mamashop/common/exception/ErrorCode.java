@@ -48,7 +48,14 @@ public enum ErrorCode {
     // 防重複下單（R02）
     ORDER_TOKEN_REQUIRED(HttpStatus.BAD_REQUEST, "缺少結帳識別碼，請重新整理結帳頁"),
     ORDER_TOKEN_INVALID(HttpStatus.CONFLICT, "結帳頁已過期，請再按一次「確認下單」"),
-    ORDER_IN_PROGRESS(HttpStatus.CONFLICT, "訂單正在處理中，請稍候到「我的訂單」確認，不要重複送出");
+    ORDER_IN_PROGRESS(HttpStatus.CONFLICT, "訂單正在處理中，請稍候到「我的訂單」確認，不要重複送出"),
+
+    // 線上付款（P01）
+    PAYMENT_METHOD_UNAVAILABLE(HttpStatus.CONFLICT, "目前無法使用線上付款，請改用貨到付款"),
+    ONLINE_PAYMENT_AMOUNT_INVALID(HttpStatus.BAD_REQUEST, "訂單金額有小數，無法線上付款，請改用貨到付款"),
+    PAYMENT_NOT_ALLOWED(HttpStatus.CONFLICT, "這筆訂單目前不需要付款"),
+    PAYMENT_EXPIRED(HttpStatus.CONFLICT, "已超過付款期限，訂單即將自動取消，請重新下單"),
+    PAYMENT_TOO_MANY_ATTEMPTS(HttpStatus.CONFLICT, "付款嘗試次數過多，請聯絡賣家");
 
     private final HttpStatus status;
     private final String defaultMessage;

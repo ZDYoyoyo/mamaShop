@@ -45,6 +45,12 @@ public class OrderTimeoutConfig {
     public static final String AUTO_COMPLETE_QUEUE = "mamashop.order-auto-complete";
     /** 處理時重試後還是失敗（M03，見 MessagingFailureConfig） */
     public static final String AUTO_COMPLETE_FAILED_QUEUE = "mamashop.order-auto-complete.failed";
+    /** 逾時未付款自動取消（P01）：和自動完成的延遲時間不同，所以另外一組等待佇列（原因見上面的 ⚠️） */
+    public static final String PAYMENT_TIMEOUT_WAIT_QUEUE = "mamashop.order-payment-timeout.wait";
+    public static final String PAYMENT_TIMEOUT_QUEUE = "mamashop.order-payment-timeout";
+    public static final String PAYMENT_TIMEOUT_FAILED_QUEUE = "mamashop.order-payment-timeout.failed";
+    public static final String PAYMENT_TIMEOUT_WAIT_KEY = "payment-timeout.wait";
+    public static final String PAYMENT_TIMEOUT_KEY = "payment-timeout";
     public static final String AUTO_COMPLETE_WAIT_KEY = "auto-complete.wait";
     public static final String AUTO_COMPLETE_KEY = "auto-complete";
 
@@ -85,5 +91,41 @@ public class OrderTimeoutConfig {
     Binding orderAutoCompleteFailedBinding(Queue orderAutoCompleteFailedQueue, TopicExchange failedExchange) {
         return BindingBuilder.bind(orderAutoCompleteFailedQueue).to(failedExchange)
                 .with(MessagingFailureConfig.FAILED_ROUTING_KEY_PREFIX + AUTO_COMPLETE_KEY);
+    }
+
+    // ===== 逾時未付款自動取消（P01） =====
+
+    @Bean
+    Queue orderPaymentTimeoutWaitQueue() {
+        return QueueBuilder.durable(PAYMENT_TIMEOUT_WAIT_QUEUE)
+                .deadLetterExchange(EXCHANGE)
+                .deadLetterRoutingKey(PAYMENT_TIMEOUT_KEY)
+                .build();
+    }
+
+    @Bean
+    Queue orderPaymentTimeoutQueue() {
+        return QueueBuilder.durable(PAYMENT_TIMEOUT_QUEUE).build();
+    }
+
+    @Bean
+    Queue orderPaymentTimeoutFailedQueue() {
+        return QueueBuilder.durable(PAYMENT_TIMEOUT_FAILED_QUEUE).build();
+    }
+
+    @Bean
+    Binding orderPaymentTimeoutWaitBinding(Queue orderPaymentTimeoutWaitQueue, DirectExchange orderTimeoutExchange) {
+        return BindingBuilder.bind(orderPaymentTimeoutWaitQueue).to(orderTimeoutExchange).with(PAYMENT_TIMEOUT_WAIT_KEY);
+    }
+
+    @Bean
+    Binding orderPaymentTimeoutBinding(Queue orderPaymentTimeoutQueue, DirectExchange orderTimeoutExchange) {
+        return BindingBuilder.bind(orderPaymentTimeoutQueue).to(orderTimeoutExchange).with(PAYMENT_TIMEOUT_KEY);
+    }
+
+    @Bean
+    Binding orderPaymentTimeoutFailedBinding(Queue orderPaymentTimeoutFailedQueue, TopicExchange failedExchange) {
+        return BindingBuilder.bind(orderPaymentTimeoutFailedQueue).to(failedExchange)
+                .with(MessagingFailureConfig.FAILED_ROUTING_KEY_PREFIX + PAYMENT_TIMEOUT_KEY);
     }
 }

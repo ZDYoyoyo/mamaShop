@@ -2,11 +2,18 @@
 /**
  * 訂單詳情（需要登入；只能看自己的，別人的訂單後端回 404）：
  * 進度、商品、金額、收件資訊、物流單號；待確認時可以取消。
+ *
+ * 線上付款（P01）：待付款時顯示付款期限與「前往付款」。
+ * 從綠界回來（?from=payment）時，付款結果是綠界「伺服器對伺服器」通知的，可能比顧客回到網站晚幾秒，
+ * 所以還是「待付款」的話每 3 秒重新讀一次（最多 30 秒）。回到網站本身不代表付款成功，一律以後端的狀態為準。
  */
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
 import { cancelOrder, getOrder } from '@/api/orders'
+import { getPaymentOptions, redirectToPayment, startPayment } from '@/api/payments'
 import LoadError from '@/components/LoadError.vue'
 import OrderProgress from '@/components/OrderProgress.vue'
 import OrderStatusTag from '@/components/OrderStatusTag.vue'
@@ -22,7 +29,60 @@ const loading = ref(true)
 const notFound = ref(false)
 const errorMessage = ref('')
 
+const route = useRoute()
 const cancellable = computed(() => order.value && isCancellableByCustomer(order.value.status))
+
+// ===== 線上付款（P01） =====
+const POLL_INTERVAL_MS = 3000
+const MAX_POLLS = 10
+
+const awaitingPayment = computed(() => order.value?.status === 'PENDING_PAYMENT' && order.value?.paymentMethod === 'ONLINE')
+const paymentTimeoutMinutes = ref(30)
+const paymentDeadline = computed(() =>
+  order.value ? new Date(new Date(order.value.createdAt).getTime() + paymentTimeoutMinutes.value * 60_000) : null,
+)
+/** 從綠界回來、還在等付款結果 */
+const confirmingPayment = ref(false)
+let pollTimer = null
+let polls = 0
+
+function stopPolling() {
+  clearTimeout(pollTimer)
+  pollTimer = null
+  confirmingPayment.value = false
+}
+
+function pollPaymentResult() {
+  if (!awaitingPayment.value || polls >= MAX_POLLS) {
+    stopPolling()
+    return
+  }
+  confirmingPayment.value = true
+  pollTimer = setTimeout(async () => {
+    polls++
+    try {
+      order.value = await getOrder(props.orderNo)
+    } catch {
+      // 讀取失敗就等下一次
+    }
+    pollPaymentResult()
+  }, POLL_INTERVAL_MS)
+}
+
+onBeforeUnmount(stopPolling)
+
+const paying = ref(false)
+async function pay() {
+  paying.value = true
+  try {
+    redirectToPayment(await startPayment(props.orderNo))
+  } catch (e) {
+    // 例如超過付款期限、訂單剛好被取消：顯示原因並讀取最新狀態
+    ElMessage.error(e.message)
+    paying.value = false
+    await load()
+  }
+}
 
 async function load() {
   loading.value = true
@@ -38,7 +98,21 @@ async function load() {
   }
 }
 
-watch(() => props.orderNo, load, { immediate: true })
+watch(
+  () => props.orderNo,
+  async () => {
+    stopPolling()
+    polls = 0
+    await load()
+    if (awaitingPayment.value) {
+      getPaymentOptions()
+        .then((options) => (paymentTimeoutMinutes.value = options.paymentTimeoutMinutes))
+        .catch(() => {})
+      if (route.query.from === 'payment') pollPaymentResult()
+    }
+  },
+  { immediate: true },
+)
 
 const cancelling = ref(false)
 async function cancel() {
@@ -73,6 +147,19 @@ async function cancel() {
       <h1>訂單 {{ order.orderNo }}</h1>
       <OrderStatusTag :status="order.status" />
     </div>
+
+    <section v-if="awaitingPayment" class="card payment-box">
+      <template v-if="confirmingPayment">
+        <p><el-icon class="is-loading"><Loading /></el-icon> 正在確認付款結果，請稍候…</p>
+      </template>
+      <template v-else>
+        <p>這筆訂單還沒有付款，請在 <strong>{{ formatDateTime(paymentDeadline) }}</strong> 前完成付款，逾時訂單會自動取消。</p>
+        <p v-if="route.query.from === 'payment'" class="muted">
+          如果剛才已經付款，可能還在處理中，請稍後重新整理；沒有完成付款可以再付一次。
+        </p>
+        <el-button type="primary" size="large" :loading="paying" class="pay" @click="pay">前往付款</el-button>
+      </template>
+    </section>
 
     <section class="card">
       <OrderProgress :order="order" />
@@ -198,5 +285,15 @@ p {
 
 .actions {
   text-align: center;
+}
+
+.payment-box {
+  border-color: var(--el-color-warning);
+  background: var(--el-color-warning-light-9);
+}
+
+.pay {
+  width: 100%;
+  margin-top: 8px;
 }
 </style>

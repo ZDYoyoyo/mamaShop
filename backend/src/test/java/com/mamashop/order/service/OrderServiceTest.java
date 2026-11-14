@@ -21,7 +21,9 @@ import com.mamashop.order.entity.Order;
 import com.mamashop.order.entity.OrderItem;
 import com.mamashop.order.entity.OrderStatus;
 import com.mamashop.order.entity.OrderStatusHistory;
+import com.mamashop.order.entity.PaymentMethod;
 import com.mamashop.order.entity.PaymentStatus;
+import com.mamashop.order.event.OrderAwaitingPaymentEvent;
 import com.mamashop.order.event.OrderEvent;
 import com.mamashop.order.event.OrderEventType;
 import com.mamashop.order.repository.OrderRepository;
@@ -135,6 +137,42 @@ class OrderServiceTest {
 
         // 發出「訂單成立」事件（M01）；真正寄信要等交易 commit 之後
         verify(eventPublisher).publishEvent(new OrderEvent("M2611120000000001", OrderEventType.CREATED));
+    }
+
+    @Test
+    void createOrder_online_startsAsPendingPayment_andSchedulesTimeout() {
+        ReflectionTestUtils.setField(orderService, "onlinePaymentEnabled", true);
+        stubHappyPath(product(1L, "帆布包", "890.00"));
+
+        OrderDetailResponse result = orderService.createOrder(USER_ID, online(homeDelivery(item(1L, 1))));
+
+        assertThat(result.status()).isEqualTo(OrderStatus.PENDING_PAYMENT);
+        assertThat(result.paymentMethod()).isEqualTo(PaymentMethod.ONLINE);
+        // 「訂單成立」通知＋排定逾時未付款自動取消（P01）
+        verify(eventPublisher).publishEvent(new OrderEvent("M2611120000000001", OrderEventType.CREATED));
+        verify(eventPublisher).publishEvent(new OrderAwaitingPaymentEvent("M2611120000000001"));
+    }
+
+    @Test
+    void createOrder_online_whenDisabled_isRejectedBeforeTouchingStock() {
+        assertThatThrownBy(() -> orderService.createOrder(USER_ID, online(homeDelivery(item(1L, 1)))))
+                .extracting("errorCode").isEqualTo(ErrorCode.PAYMENT_METHOD_UNAVAILABLE);
+        verifyNoInteractions(orderStockService);
+    }
+
+    @Test
+    void createOrder_online_withCents_isRejected() {
+        // 綠界只收整數金額
+        ReflectionTestUtils.setField(orderService, "onlinePaymentEnabled", true);
+        stubShippingAndProducts(product(1L, "零錢包", "99.50"));
+
+        assertThatThrownBy(() -> orderService.createOrder(USER_ID, online(homeDelivery(item(1L, 1)))))
+                .extracting("errorCode").isEqualTo(ErrorCode.ONLINE_PAYMENT_AMOUNT_INVALID);
+    }
+
+    private static CreateOrderRequest online(CreateOrderRequest r) {
+        return new CreateOrderRequest(r.items(), r.shippingMethod(), r.recipientName(), r.recipientPhone(),
+                r.shippingAddress(), r.cvsBrand(), r.cvsStoreCode(), r.cvsStoreName(), r.note(), PaymentMethod.ONLINE);
     }
 
     @Test

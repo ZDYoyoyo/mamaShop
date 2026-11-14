@@ -163,6 +163,67 @@ public class AdminOrderService {
     }
 
     /**
+     * 線上付款成功（P01，由金流通知呼叫）。
+     *
+     * <p>用 {@link OrderRepository#findForUpdateByOrderNo} 鎖住訂單（PaymentService 已經先鎖了，這裡是同一個交易，
+     * 拿到的是同一個物件）：和「逾時未付款自動取消」同時發生時，
+     * 後到的一方會等前一方做完，再依最新狀態處理，不會「已付款卻被取消」或「取消後又被改成備貨中」。
+     *
+     * <ul>
+     *   <li>待付款 → 備貨中、已付款，通知顧客（和家人按「確認訂單」寄同一種信）</li>
+     *   <li>已取消（逾時、顧客自己取消）→ 訂單<b>維持已取消</b>（庫存已經還回去了），標記已付款，
+     *       狀態紀錄寫「請退款」，後台列表會看到「已取消＋已付款」</li>
+     *   <li>已經付過款 → 重複付款，同樣記錄「請退款」</li>
+     * </ul>
+     * 已經處理過的同一筆付款（金流重複通知）在 PaymentService 就擋掉了，不會進來這裡。
+     */
+    @Transactional
+    public OnlinePaymentOutcome onlinePaymentReceived(String orderNo, String providerTradeNo) {
+        Order order = orderRepository.findForUpdateByOrderNo(orderNo)
+                .orElseThrow(() -> new NotFoundException("找不到訂單"));
+        Instant now = Instant.now();
+        if (order.getPaymentStatus() == PaymentStatus.PAID) {
+            recordWithoutStatusChange(order, "重複付款（綠界交易編號 " + providerTradeNo + "），請到綠界後台退款其中一筆");
+            return OnlinePaymentOutcome.DUPLICATE_PAYMENT;
+        }
+        order.setPaymentStatus(PaymentStatus.PAID);
+        order.setPaidAt(now);
+        if (order.getStatus() != OrderStatus.PENDING_PAYMENT) {
+            orderRepository.saveAndFlush(order);
+            recordWithoutStatusChange(order, "訂單" + order.getStatus().label() + "後才收到線上付款（綠界交易編號 "
+                    + providerTradeNo + "），請到綠界後台退款");
+            return OnlinePaymentOutcome.PAID_AFTER_CANCEL;
+        }
+        changeStatus(order, OrderStatus.PROCESSING, null, "線上付款成功（綠界交易編號 " + providerTradeNo + "）");
+        eventPublisher.publishEvent(new OrderEvent(orderNo, OrderEventType.CONFIRMED));
+        return OnlinePaymentOutcome.CONFIRMED;
+    }
+
+    /**
+     * 逾時未付款，系統自動取消並歸還庫存（P01＋M02 的延遲任務呼叫）。
+     *
+     * <p>和 {@link #autoComplete} 一樣冪等：不是「待付款」（已經付款、顧客自己取消了）就什麼都不做。
+     * 鎖住訂單的原因見 {@link #onlinePaymentReceived}。
+     *
+     * @return 這次有把訂單取消
+     */
+    @Transactional
+    public boolean autoCancelUnpaid(String orderNo, String note) {
+        Order order = orderRepository.findForUpdateByOrderNo(orderNo).orElse(null);
+        if (order == null || order.getStatus() != OrderStatus.PENDING_PAYMENT) {
+            return false;
+        }
+        changeStatus(order, OrderStatus.CANCELLED, null, note);
+        orderStockService.restore(order);
+        return true;
+    }
+
+    /** 狀態沒變、但要留下紀錄（例如需要退款），操作者是系統 */
+    private void recordWithoutStatusChange(Order order, String note) {
+        historyRepository.save(new OrderStatusHistory(order, order.getStatus(), order.getStatus(), null, note));
+    }
+
+    /**
      * 管理員取消（出貨前都可以，由狀態機決定），歸還庫存。
      * 和顧客取消不同：顧客只能在「待確認」時取消。
      */

@@ -4,8 +4,10 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
 
 vi.mock('@/api/orders', () => ({ listMyOrders: vi.fn(), getOrder: vi.fn(), cancelOrder: vi.fn() }))
+vi.mock('@/api/payments', () => ({ getPaymentOptions: vi.fn(), startPayment: vi.fn(), redirectToPayment: vi.fn() }))
 
 import { cancelOrder, getOrder } from '@/api/orders'
+import { getPaymentOptions, redirectToPayment, startPayment } from '@/api/payments'
 import { ApiError } from '@/api/http'
 import { routes } from '@/router'
 import { settle } from '@/test-utils'
@@ -37,9 +39,9 @@ function order(overrides = {}) {
   }
 }
 
-async function mountDetail() {
+async function mountDetail(path = '/orders/M1') {
   const router = createRouter({ history: createMemoryHistory(), routes })
-  await router.push('/orders/M1')
+  await router.push(path)
   const wrapper = mount(OrderDetailView, {
     props: { orderNo: 'M1' },
     global: { plugins: [router] },
@@ -133,5 +135,79 @@ describe('OrderDetailView', () => {
     const wrapper = await mountDetail()
 
     expect(wrapper.text()).toContain('找不到這筆訂單')
+  })
+})
+
+describe('OrderDetailView 線上付款（P01）', () => {
+  const awaiting = (overrides = {}) =>
+    order({ status: 'PENDING_PAYMENT', paymentMethod: 'ONLINE', createdAt: '2026-11-14T02:00:00Z', ...overrides })
+
+  beforeEach(() => {
+    document.body.innerHTML = ''
+    vi.mocked(getOrder).mockReset()
+    vi.mocked(startPayment).mockReset()
+    vi.mocked(redirectToPayment).mockReset()
+    vi.mocked(getPaymentOptions).mockClear()
+    vi.mocked(getPaymentOptions).mockResolvedValue({ onlinePaymentEnabled: true, paymentTimeoutMinutes: 30 })
+  })
+
+  it('待付款：顯示付款期限（下單時間＋30 分鐘）與「前往付款」', async () => {
+    vi.mocked(getOrder).mockResolvedValue(awaiting())
+    const form = { action: 'https://payment-stage.ecpay.com.tw/x', fields: { a: '1' } }
+    vi.mocked(startPayment).mockResolvedValue(form)
+    const wrapper = await mountDetail()
+
+    expect(wrapper.find('.payment-box').text()).toContain('2026/11/14 10:30') // 台灣時間 10:00 下單
+    await wrapper.find('button.pay').trigger('click')
+    await settle()
+
+    expect(startPayment).toHaveBeenCalledWith('M1')
+    expect(redirectToPayment).toHaveBeenCalledWith(form)
+  })
+
+  it('前往付款失敗（例如超過期限）：顯示原因並重新讀取', async () => {
+    vi.mocked(getOrder).mockResolvedValueOnce(awaiting()).mockResolvedValueOnce(awaiting({ status: 'CANCELLED' }))
+    vi.mocked(startPayment).mockRejectedValue(
+      new ApiError({ status: 409, code: 'PAYMENT_EXPIRED', message: '已超過付款期限' }),
+    )
+    const wrapper = await mountDetail()
+
+    await wrapper.find('button.pay').trigger('click')
+    await settle()
+
+    expect(document.body.textContent).toContain('已超過付款期限')
+    expect(wrapper.find('.payment-box').exists()).toBe(false)
+  })
+
+  it('從綠界回來還是待付款：每 3 秒重新讀取，付款成功後顯示新狀態', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      vi.mocked(getOrder)
+        .mockResolvedValueOnce(awaiting())
+        .mockResolvedValueOnce(awaiting())
+        .mockResolvedValueOnce(awaiting({ status: 'PROCESSING', paymentStatus: 'PAID', confirmedAt: '2026-11-14T02:05:00Z' }))
+      const wrapper = await mountDetail('/orders/M1?from=payment')
+      expect(wrapper.text()).toContain('正在確認付款結果')
+
+      await vi.advanceTimersByTimeAsync(3000)
+      await settle()
+      expect(wrapper.text()).toContain('正在確認付款結果')
+      await vi.advanceTimersByTimeAsync(3000)
+      await settle()
+
+      expect(getOrder).toHaveBeenCalledTimes(3)
+      expect(wrapper.find('.payment-box').exists()).toBe(false)
+      expect(wrapper.text()).toContain('線上付款（信用卡）（已付款）')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('貨到付款的訂單不顯示付款區塊', async () => {
+    vi.mocked(getOrder).mockResolvedValue(order())
+    const wrapper = await mountDetail()
+
+    expect(wrapper.find('.payment-box').exists()).toBe(false)
+    expect(getPaymentOptions).not.toHaveBeenCalled()
   })
 })

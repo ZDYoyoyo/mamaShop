@@ -13,6 +13,7 @@ export function cvsBrandLabel(value) {
 
 export const PAYMENT_METHOD_LABELS = {
   COD: '貨到付款',
+  ONLINE: '線上付款（信用卡）',
 }
 
 /**

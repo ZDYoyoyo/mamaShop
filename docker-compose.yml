@@ -98,6 +98,11 @@ services:
       MAIL_HOST: mailpit
       MAIL_PORT: 1025
       SITE_URL: ${SITE_URL:-http://localhost:5173}
+      # 線上付款（P01）：本機用綠界的測試商店（.env.example）
+      ECPAY_ENABLED: ${ECPAY_ENABLED:-false}
+      ECPAY_MERCHANT_ID: ${ECPAY_MERCHANT_ID:-}
+      ECPAY_HASH_KEY: ${ECPAY_HASH_KEY:-}
+      ECPAY_HASH_IV: ${ECPAY_HASH_IV:-}
     ports:
       - "127.0.0.1:8080:8080"
     volumes:

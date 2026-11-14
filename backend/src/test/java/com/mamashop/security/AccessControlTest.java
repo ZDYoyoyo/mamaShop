@@ -84,6 +84,10 @@ class AccessControlTest {
                 e("GET", "/api/orders", Access.LOGGED_IN),
                 e("GET", "/api/orders/{orderNo}", Access.LOGGED_IN),
                 e("POST", "/api/orders/{orderNo}/cancel", Access.LOGGED_IN),
+                // 線上付款（P01）：通知是綠界伺服器呼叫的，沒有 JWT（靠檢查碼驗證）
+                e("POST", "/api/orders/{orderNo}/payment", Access.LOGGED_IN),
+                e("GET", "/api/payments/options", Access.PUBLIC),
+                e("POST", "/api/payments/ecpay/notify", Access.PUBLIC),
                 // ===== 後台 =====
                 e("GET", "/api/admin/categories", Access.ADMIN),
                 e("POST", "/api/admin/categories", Access.ADMIN),

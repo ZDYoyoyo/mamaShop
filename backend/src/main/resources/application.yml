@@ -115,6 +115,20 @@ app:
     enabled: ${ORDER_TIMEOUT_ENABLED:true}
     # 宅配訂單「已送達」之後多久自動完成（超商取貨不自動完成）。格式：7d、12h、30m
     auto-complete-after: ${ORDER_AUTO_COMPLETE_AFTER:7d}
+    # 線上付款（P01）的訂單多久沒付款就自動取消並歸還庫存
+    payment-timeout: ${ORDER_PAYMENT_TIMEOUT:30m}
+  payment:
+    # 線上付款（P01，綠界 ECPay）。沒開的話結帳頁只有貨到付款
+    ecpay:
+      enabled: ${ECPAY_ENABLED:false}
+      # 商店代號、HashKey、HashIV：一律從環境變數讀（本機用綠界公開的測試商店，見 .env.example）
+      merchant-id: ${ECPAY_MERCHANT_ID:}
+      hash-key: ${ECPAY_HASH_KEY:}
+      hash-iv: ${ECPAY_HASH_IV:}
+      # 付款頁網址。預設是測試環境（不會真的扣款）；正式環境改成 https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5
+      cashier-url: ${ECPAY_CASHIER_URL:https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5}
+      # 組出付款通知與返回的網址
+      site-url: ${SITE_URL:http://localhost:5173}
   admin:
     # 預設管理員：啟動時若這個 email 還不存在就建立。沒設定則略過
     email: ${ADMIN_EMAIL:}
