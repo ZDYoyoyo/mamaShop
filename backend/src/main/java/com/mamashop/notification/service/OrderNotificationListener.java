@@ -13,9 +13,8 @@ import org.springframework.stereotype.Component;
  * <p>和下單是不同的執行緒、不同的時間點：寄信慢（SMTP 常常要 1～2 秒）、寄信失敗，都不影響下單。
  * 這就是用佇列「解耦」的好處。
  *
- * <p>處理失敗（丟例外）時：application.yml 設定 default-requeue-rejected=false，
- * 訊息不會放回佇列（否則同一封信會無限重試、一直失敗）。M03 會加上重試與失敗佇列，
- * 讓失敗的通知不會就這樣不見。
+ * <p>處理失敗（丟例外，例如寄信伺服器暫時連不上）時：先重試（M03，等 2 秒、6 秒，共 3 次），
+ * 還是失敗就移到失敗佇列 mamashop.order-notifications.failed，不會就這樣不見（見 MessagingFailureConfig）。
  */
 @Component
 public class OrderNotificationListener {
