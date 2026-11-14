@@ -55,7 +55,10 @@ public enum ErrorCode {
     ONLINE_PAYMENT_AMOUNT_INVALID(HttpStatus.BAD_REQUEST, "訂單金額有小數，無法線上付款，請改用貨到付款"),
     PAYMENT_NOT_ALLOWED(HttpStatus.CONFLICT, "這筆訂單目前不需要付款"),
     PAYMENT_EXPIRED(HttpStatus.CONFLICT, "已超過付款期限，訂單即將自動取消，請重新下單"),
-    PAYMENT_TOO_MANY_ATTEMPTS(HttpStatus.CONFLICT, "付款嘗試次數過多，請聯絡賣家");
+    PAYMENT_TOO_MANY_ATTEMPTS(HttpStatus.CONFLICT, "付款嘗試次數過多，請聯絡賣家"),
+
+    // 物流（P02）
+    CVS_MAP_UNAVAILABLE(HttpStatus.CONFLICT, "目前無法使用超商電子地圖，請手動填寫門市");
 
     private final HttpStatus status;
     private final String defaultMessage;

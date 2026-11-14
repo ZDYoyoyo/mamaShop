@@ -129,6 +129,16 @@ app:
       cashier-url: ${ECPAY_CASHIER_URL:https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5}
       # 組出付款通知與返回的網址
       site-url: ${SITE_URL:http://localhost:5173}
+  logistics:
+    # 超商電子地圖選門市（P02，綠界物流）。沒開的話結帳頁手動填門市
+    ecpay:
+      enabled: ${ECPAY_LOGISTICS_ENABLED:false}
+      merchant-id: ${ECPAY_LOGISTICS_MERCHANT_ID:}
+      # true：店到店（C2C）；false：大宗寄倉（B2C）。要和綠界申請的物流服務一致
+      c2c: ${ECPAY_LOGISTICS_C2C:true}
+      # 預設測試環境；正式環境改成 https://logistics.ecpay.com.tw/Express/map
+      map-url: ${ECPAY_LOGISTICS_MAP_URL:https://logistics-stage.ecpay.com.tw/Express/map}
+      site-url: ${SITE_URL:http://localhost:5173}
   admin:
     # 預設管理員：啟動時若這個 email 還不存在就建立。沒設定則略過
     email: ${ADMIN_EMAIL:}

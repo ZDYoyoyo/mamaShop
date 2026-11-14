@@ -8,20 +8,26 @@
  * - 成功後移除已下單的品項：貨到付款導向訂單完成頁；
  *   線上付款（P01）接著呼叫「前往付款」，整頁跳到綠界。前往付款失敗就導向訂單頁，那裡可以再按「前往付款」
  * - 線上付款要後端有開（/payments/options），沒開或查詢失敗就只顯示貨到付款
+ * - 超商取貨（P02）：後端有開電子地圖（/logistics/options）就用地圖選門市，否則手動填店號。
+ *   按「選擇門市」→ 表單暫存到 sessionStorage → 整頁跳到綠界地圖 → 選好後回到 /checkout?cvsBrand=...&cvsStoreCode=...
+ *   → 拿回暫存、填入門市、把網址參數清掉
  */
-import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { getShippingMethods } from '@/api/catalog'
 import { createOrder, getCheckoutToken } from '@/api/orders'
+import { getCvsMapForm, getLogisticsOptions, redirectToCvsMap } from '@/api/logistics'
 import { getPaymentOptions, redirectToPayment, startPayment } from '@/api/payments'
 import LoadError from '@/components/LoadError.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
 import { formatPrice } from '@/utils/format'
-import { CVS_BRANDS, PAYMENT_METHOD_LABELS } from '@/utils/labels'
+import { saveCheckoutDraft, takeCheckoutDraft } from '@/utils/checkoutDraft'
+import { CVS_BRANDS, cvsBrandLabel, PAYMENT_METHOD_LABELS } from '@/utils/labels'
 import { PHONE_MESSAGE, PHONE_PATTERN, toFieldErrorMap } from '@/utils/validation'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 const cart = useCartStore()
 
@@ -42,6 +48,8 @@ const form = reactive({
   cvsBrand: '',
   cvsStoreCode: '',
   cvsStoreName: '',
+  /** 電子地圖帶回來的門市地址，只是顯示給顧客確認，不送到後端 */
+  cvsStoreAddress: '',
   note: '',
   paymentMethod: 'COD',
 })
@@ -50,13 +58,18 @@ const form = reactive({
 const paymentOptions = ref({ onlinePaymentEnabled: false, paymentTimeoutMinutes: 30 })
 const isOnline = computed(() => form.paymentMethod === 'ONLINE')
 
+/** 超商電子地圖（P02）：{ cvsMapEnabled } */
+const logisticsOptions = ref({ cvsMapEnabled: false })
+const mapError = ref('')
+const mapLoading = ref(false)
+
 const isHomeDelivery = computed(() => form.shippingMethod === 'HOME_DELIVERY')
 const isCvsPickup = computed(() => form.shippingMethod === 'CVS_PICKUP')
 const selectedMethod = computed(() => shippingMethods.value.find((m) => m.code === form.shippingMethod))
 const shippingFee = computed(() => Number(selectedMethod.value?.fee ?? 0))
 const estimatedTotal = computed(() => (Math.round(cart.subtotal * 100) + Math.round(shippingFee.value * 100)) / 100)
 
-const rules = {
+const rules = computed(() => ({
   shippingMethod: [{ required: true, message: '請選擇運送方式', trigger: 'change' }],
   recipientName: [
     { required: true, message: '請輸入收件人姓名', trigger: 'blur' },
@@ -70,23 +83,30 @@ const rules = {
   // 所以可以直接標成必填（和後端的 @ValidShippingInfo 一致：宅配要地址、超商要門市）
   shippingAddress: [{ required: true, whitespace: true, message: '宅配需填寫收件地址', trigger: 'blur' }],
   cvsBrand: [{ required: true, message: '請選擇超商', trigger: 'change' }],
-  cvsStoreCode: [{ required: true, whitespace: true, message: '請填寫門市店號', trigger: 'blur' }],
+  cvsStoreCode: [{
+    required: true,
+    whitespace: true,
+    message: logisticsOptions.value.cvsMapEnabled ? '請選擇取貨門市' : '請填寫門市店號',
+    trigger: 'blur',
+  }],
   cvsStoreName: [{ required: true, whitespace: true, message: '請填寫門市名稱', trigger: 'blur' }],
-}
+}))
 
 async function load() {
   loading.value = true
   loadError.value = ''
   try {
     // 同時更新購物車（價格、庫存可能變了）與取得運送方式
-    const [cartNotices, methods, token, options] = await Promise.all([
+    const [cartNotices, methods, token, options, logistics] = await Promise.all([
       cart.refresh(),
       getShippingMethods(),
       getCheckoutToken(),
-      // 查不到付款設定不影響結帳：當作只有貨到付款
+      // 查不到付款、物流設定不影響結帳：當作只有貨到付款、手動填門市
       getPaymentOptions().catch(() => null),
+      getLogisticsOptions().catch(() => null),
     ])
     if (options) paymentOptions.value = options
+    if (logistics) logisticsOptions.value = logistics
     checkoutToken.value = token.token
     notices.value = cartNotices
     shippingMethods.value = methods
@@ -103,18 +123,85 @@ onMounted(() => {
     router.replace({ name: 'cart' })
     return
   }
+  applyCvsMapResult()
   load()
 })
 
+// ===== 超商電子地圖（P02） =====
+
+/** 從電子地圖回來：拿回暫存的表單、填入門市、清掉網址參數（重新整理才不會又套用一次） */
+function applyCvsMapResult() {
+  const query = route.query
+  if (!query.cvsBrand && !query.cvsMapError) return
+  const draft = takeCheckoutDraft()
+  if (draft) Object.assign(form, draft)
+  if (query.cvsMapError) {
+    form.shippingMethod = 'CVS_PICKUP'
+    mapError.value = '門市資料有誤，請重新選擇門市'
+  } else if (CVS_BRANDS.some((b) => b.value === query.cvsBrand)) {
+    form.shippingMethod = 'CVS_PICKUP'
+    form.cvsBrand = query.cvsBrand
+    form.cvsStoreCode = String(query.cvsStoreCode ?? '')
+    form.cvsStoreName = String(query.cvsStoreName ?? '')
+    form.cvsStoreAddress = String(query.cvsStoreAddress ?? '')
+  }
+  router.replace({ name: 'checkout' })
+}
+
+function clearStore() {
+  form.cvsStoreCode = ''
+  form.cvsStoreName = ''
+  form.cvsStoreAddress = ''
+}
+
+// 換了超商品牌：之前選的門市是別家的，要重選（手動填寫時不清，讓顧客自己改）
+watch(
+  () => form.cvsBrand,
+  (brand, previous) => {
+    if (logisticsOptions.value.cvsMapEnabled && previous && brand !== previous) clearStore()
+  },
+)
+
+// 從線上付款改成貨到付款：之前的門市是用「不用代收貨款」選的，可能不能取貨付款，要重選
+watch(
+  () => form.paymentMethod,
+  (method, previous) => {
+    if (logisticsOptions.value.cvsMapEnabled && previous === 'ONLINE' && method === 'COD' && form.cvsStoreCode) {
+      clearStore()
+      mapError.value = '改成貨到付款後，請重新選擇可以取貨付款的門市'
+    }
+  },
+)
+
+async function openCvsMap() {
+  mapError.value = ''
+  if (!(await formRef.value.validateField('cvsBrand').catch(() => false))) return
+  mapLoading.value = true
+  try {
+    const mapForm = await getCvsMapForm({
+      brand: form.cvsBrand,
+      collection: form.paymentMethod !== 'ONLINE', // 貨到付款要選可以代收貨款的門市
+      mobile: window.matchMedia?.('(max-width: 640px)').matches ?? false,
+    })
+    saveCheckoutDraft(form)
+    redirectMessage.value = '正在前往超商電子地圖…'
+    redirectToCvsMap(mapForm)
+  } catch (e) {
+    mapError.value = e.message
+  } finally {
+    mapLoading.value = false
+  }
+}
+
 const submitting = ref(false)
-/** 正在跳到綠界：頁面離開前按鈕維持停用，避免再按一次 */
-const redirecting = ref(false)
+/** 正在跳到綠界（付款頁或電子地圖）：頁面離開前顯示這個訊息，避免再按一次 */
+const redirectMessage = ref('')
 const submitError = ref('')
 const serverErrors = ref({})
 
 async function submit() {
   // 已經在送出中就不再送（雙重保險：按鈕本身也會停用）
-  if (submitting.value || redirecting.value) return
+  if (submitting.value || redirectMessage.value) return
   submitError.value = ''
   serverErrors.value = {}
   if (!(await formRef.value.validate().catch(() => false))) return
@@ -166,7 +253,7 @@ async function submit() {
 async function goToPayment(orderNo) {
   try {
     const form = await startPayment(orderNo)
-    redirecting.value = true
+    redirectMessage.value = '正在前往綠界付款頁…'
     redirectToPayment(form)
   } catch {
     router.replace({ name: 'order-detail', params: { orderNo } })
@@ -186,7 +273,7 @@ async function refreshCheckoutToken() {
   <h1>結帳</h1>
 
   <!-- 購物車已經清掉了，畫面不要閃一下「沒有可以結帳的商品」 -->
-  <el-result v-if="redirecting" icon="info" title="正在前往綠界付款頁…" sub-title="請不要關閉視窗" />
+  <el-result v-if="redirectMessage" icon="info" :title="redirectMessage" sub-title="請不要關閉視窗" />
   <el-skeleton v-else-if="loading" animated :rows="6" />
   <LoadError v-else-if="loadError" :message="loadError" @retry="load" />
 
@@ -241,13 +328,34 @@ async function refreshCheckoutToken() {
               <el-option v-for="brand in CVS_BRANDS" :key="brand.value" :label="brand.label" :value="brand.value" />
             </el-select>
           </el-form-item>
-          <el-form-item label="門市店號" prop="cvsStoreCode" :error="serverErrors.cvsStoreCode">
-            <el-input v-model="form.cvsStoreCode" maxlength="20" inputmode="numeric" />
+          <!-- 電子地圖選門市（P02） -->
+          <el-form-item
+            v-if="logisticsOptions.cvsMapEnabled"
+            label="取貨門市"
+            prop="cvsStoreCode"
+            :error="serverErrors.cvsStoreCode"
+          >
+            <div class="store">
+              <div v-if="form.cvsStoreCode" class="store-info">
+                <strong>{{ cvsBrandLabel(form.cvsBrand) }} {{ form.cvsStoreName }}</strong>（店號 {{ form.cvsStoreCode }}）
+                <div v-if="form.cvsStoreAddress" class="hint">{{ form.cvsStoreAddress }}</div>
+              </div>
+              <el-button :loading="mapLoading" class="map-button" @click="openCvsMap">
+                {{ form.cvsStoreCode ? '重新選擇門市' : '選擇門市' }}
+              </el-button>
+              <p v-if="mapError" class="map-error">{{ mapError }}</p>
+            </div>
           </el-form-item>
-          <el-form-item label="門市名稱" prop="cvsStoreName" :error="serverErrors.cvsStoreName">
-            <el-input v-model="form.cvsStoreName" maxlength="50" placeholder="例如：信義門市" />
-          </el-form-item>
-          <p class="hint">可在超商官網的門市查詢找到店號與門市名稱</p>
+          <!-- 沒開電子地圖：手動填寫 -->
+          <template v-else>
+            <el-form-item label="門市店號" prop="cvsStoreCode" :error="serverErrors.cvsStoreCode">
+              <el-input v-model="form.cvsStoreCode" maxlength="20" inputmode="numeric" />
+            </el-form-item>
+            <el-form-item label="門市名稱" prop="cvsStoreName" :error="serverErrors.cvsStoreName">
+              <el-input v-model="form.cvsStoreName" maxlength="50" placeholder="例如：信義門市" />
+            </el-form-item>
+            <p class="hint">可在超商官網的門市查詢找到店號與門市名稱</p>
+          </template>
         </template>
       </section>
 
@@ -284,8 +392,8 @@ async function refreshCheckoutToken() {
         <p class="hint">實際金額以訂單成立時為準</p>
 
         <el-alert v-if="submitError" :title="submitError" type="error" :closable="false" show-icon class="submit-error" />
-        <el-button type="primary" size="large" native-type="submit" :loading="submitting || redirecting" :disabled="submitting || redirecting" class="submit">
-          {{ redirecting ? '前往付款頁…' : submitting ? '送出中…' : isOnline ? '確認下單並前往付款' : '確認下單' }}
+        <el-button type="primary" size="large" native-type="submit" :loading="submitting" :disabled="submitting" class="submit">
+          {{ submitting ? '送出中…' : isOnline ? '確認下單並前往付款' : '確認下單' }}
         </el-button>
       </section>
     </el-form>
@@ -379,5 +487,25 @@ h2 {
 .submit {
   width: 100%;
   margin-top: 12px;
+}
+.store {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.map-error {
+  width: 100%;
+  margin: 0;
+  color: var(--el-color-danger);
+  font-size: 0.9rem;
+}
+
+.store-info {
+  flex: 1;
+  min-width: 200px;
+  line-height: 1.5;
 }
 </style>

@@ -1110,3 +1110,77 @@ print(urllib.parse.urlencode(p))
 PY
 curl -X POST localhost:8080/api/payments/ecpay/notify -H 'content-type: application/x-www-form-urlencoded' --data @notify.txt
 ```
+
+## P02 超商電子地圖選店（綠界物流）
+
+### 流程
+
+```
+結帳頁：選「超商取貨」→ 選超商品牌 → 按「選擇門市」
+  ├─ 表單（收件人、備註、付款方式…）暫存到 sessionStorage
+  ├─ GET /api/logistics/cvs-map → { action, fields } → 整頁 form POST 到綠界電子地圖
+  │     LogisticsSubType：UNIMARTC2C／FAMIC2C／HILIFEC2C／OKMARTC2C（店到店）
+  │     IsCollection：貨到付款 Y（只顯示能代收貨款的門市）、線上付款 N
+  ▼
+各家超商的地圖頁：顧客點門市
+  ▼ 顧客的瀏覽器 form POST 到 ServerReplyURL（我們的後端）
+POST /api/logistics/ecpay/cvs-map-reply → 檢查格式 → 303 轉址 /checkout?cvsBrand=SEVEN&cvsStoreCode=...&cvsStoreName=...&cvsStoreAddress=...
+  ▼
+結帳頁：拿回暫存的表單、填入門市（顯示店名、店號、地址）、把網址參數清掉 → 顧客送出訂單
+```
+
+### 設計
+
+- ℹ️ **為什麼要經過後端轉址**：綠界用 form POST 回傳，前端是 Nginx 上的靜態檔案，不能接 POST。後端收下來再 303 轉址到結帳頁
+  - 用 303 See Other 而不是 302：明確告訴瀏覽器「改用 GET 打開」
+- ℹ️ **門市回傳沒有檢查碼，當成「顧客自己填的資料」**：
+  - 這是顧客的瀏覽器送的，任何人都能自己組一個，但意義和以前手動填門市一樣：選錯只影響顧客自己
+  - 所以只檢查格式：品牌認得、店號只能英數字、店名 1～50 字、去掉控制字元。格式不對就帶 `cvsMapError` 回結帳頁請顧客重選
+  - 下單時後端照常驗證（同一套規則），P03 建立物流單時綠界會再確認門市
+- ⚠️ **踩到的坑：CORS 把綠界的回傳擋成 403**（實際用瀏覽器跑一次才發現，MockMvc 測試不會帶 Origin）：
+  - 綠界的頁面讓瀏覽器 form POST 過來時，瀏覽器會帶 `Origin: https://logistics-stage.ecpay.com.tw`
+  - 不在允許清單 → Spring Security 的 CorsFilter 直接回 403「Invalid CORS request」。正式環境也一樣會發生（不是只有本機）
+  - 修正：這兩個綠界回呼的網址（電子地圖回傳、P01 的付款通知）**不套用 CORS**，`CorsConfigurationSource` 對它們回傳 null
+  - 為什麼安全：CORS 只管「別的網站的 JavaScript 能不能讀回應」，這兩個網址本來就公開、自己驗證內容。其他 API 的 CORS 照常（有測試確認）
+- ℹ️ **跳到地圖前暫存表單**：
+  - 整頁跳走再回來，頁面會重新載入，填好的收件人、備註會不見
+  - 暫存在 sessionStorage：只在這個分頁、關掉就消失，有姓名電話不放 localStorage；拿一次就刪；只接受認得的欄位
+- ℹ️ **換超商品牌會清掉已選的門市**（門市是那一家的）
+- ℹ️ **從線上付款改成貨到付款也會清掉**：之前是用「不代收貨款」選的，那間門市可能不能取貨付款
+- ℹ️ **沒開電子地圖（或查詢設定失敗）就維持手動填寫**：正式環境簽約前照常運作
+- ℹ️ 地圖只需要商店代號，**不需要 HashKey**；P03 建立物流單才需要
+- ℹ️ 預設店到店（C2C）：個人或小商店常用，寄件時把包裹拿到附近超商寄出。B2C（大宗寄倉）要先把貨送到物流中心，沒有 OK 超商
+- ℹ️ CSP `form-action` 加上綠界物流的兩個網址；前端「整頁 POST 到外部網站」抽成 `utils/postForm.js`，付款和地圖共用
+
+### 設定
+
+| 環境變數 | 本機（`.env.example`） | 正式環境（`deploy/.env`） |
+|---|---|---|
+| `ECPAY_LOGISTICS_ENABLED` | `true` | 簽約前 `false`（手動填門市） |
+| `ECPAY_LOGISTICS_MERCHANT_ID` | 綠界公開的店到店測試商店 2000933 | 綠界廠商後台的商店代號 |
+| `ECPAY_LOGISTICS_C2C` | `true` | 和申請的物流服務一致 |
+| `ECPAY_LOGISTICS_MAP_URL` | 預設測試環境 | 預設正式環境（prod compose） |
+
+### 刻意沒做／之後要注意
+
+- 🔲 **沒有把門市地址存進訂單**：只在結帳頁顯示給顧客確認。店號＋店名就足夠寄件；P03 若需要再加欄位
+- 🔲 「已選門市」沒有保留到下一次購物（每次結帳重新選）
+- ⚠️ 綠界測試環境的地圖是「模擬頁」（固定一間測試門市、一個「確定門市」按鈕），正式環境才是各家超商真的地圖。上線後用手機實際選一次
+
+### 測試
+
+- ℹ️ `CvsMapServiceTest`：
+  - 品牌對應物流子類型（C2C 加後綴、B2C 沒有 OK）、代收貨款、手機版
+  - 回傳轉址：中文有編碼；店號有奇怪字元、不認得的品牌、店名空白或太長 → `cvsMapError`；控制字元被去掉
+- ℹ️ `CvsMapReplyIntegrationTest`（MockMvc）：**帶綠界的 Origin** 也能 303 轉址；別的網站呼叫其他 API 照樣 403
+- ℹ️ `AccessControlTest`：新的 3 支 API
+- ℹ️ 前端：
+  - 有開地圖時不顯示手動欄位、沒選門市不能送出
+  - 按「選擇門市」會暫存表單並跳到地圖；沒選超商會提示
+  - 從地圖回來拿回表單、填入門市、清掉網址，送出帶對的門市
+  - 換品牌清掉門市；回傳有誤顯示訊息
+- ℹ️ 後端 377、前端 188 個測試全部通過
+- ℹ️ **實測**（本機後端＋前端＋綠界測試環境，Playwright 手機畫面）：
+  - 結帳選 7-ELEVEN → 按「選擇門市」→ 跳到綠界「統一電子地圖」→ 按「確定門市」→ 回到結帳頁
+  - 門市自動填入「7-ELEVEN 經貿（店號 238669）／台北市南港區三重路19號1樓」，備註還在
+  - 送出訂單，資料庫存的是 238669／經貿（綠界回傳的店名後面有空白，已去掉）

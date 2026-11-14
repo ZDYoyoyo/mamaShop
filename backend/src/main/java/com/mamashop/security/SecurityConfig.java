@@ -2,6 +2,7 @@ package com.mamashop.security;
 
 import com.mamashop.user.repository.UserRepository;
 import java.util.List;
+import java.util.Set;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -47,6 +48,9 @@ public class SecurityConfig {
                         // 線上付款（P01）：結帳頁的付款設定；綠界伺服器的付款通知（沒有 JWT，靠檢查碼驗證）
                         .requestMatchers(HttpMethod.GET, "/api/payments/options").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/payments/ecpay/notify").permitAll()
+                        // 超商電子地圖（P02）：物流設定；地圖頁把選好的門市 POST 回來（顧客的瀏覽器送的，沒有 JWT）
+                        .requestMatchers(HttpMethod.GET, "/api/logistics/options").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/logistics/ecpay/cvs-map-reply").permitAll()
                         // 商品圖片（B07）
                         .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
                         // API 文件（B13）。是否啟用由 API_DOCS_ENABLED 控制，正式環境關閉時這些路徑會是 404
@@ -77,6 +81,10 @@ public class SecurityConfig {
         return PasswordEncoderFactories.createDelegatingPasswordEncoder();
     }
 
+    /** 綠界從外部呼叫的網址（P01 付款通知、P02 電子地圖回傳） */
+    private static final Set<String> CALLBACK_PATHS = Set.of(
+            "/api/payments/ecpay/notify", "/api/logistics/ecpay/cvs-map-reply");
+
     /**
      * CORS：本機開發時前端（localhost:5173）和後端（localhost:8080）不同來源，
      * 瀏覽器預設會擋。這裡列出允許的前端網址。
@@ -94,6 +102,11 @@ public class SecurityConfig {
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", config);
-        return source;
+        // 綠界回呼的網址不做 CORS 檢查（回傳 null = 這個請求不套用 CORS）：
+        // 電子地圖（P02）是綠界的網頁讓顧客的瀏覽器用 form POST 回來，瀏覽器會帶 Origin: https://logistics(-stage).ecpay.com.tw，
+        // 不在允許清單裡，CorsFilter 會直接回 403「Invalid CORS request」。
+        // CORS 只管「別的網站的 JavaScript 能不能讀回應」，這兩個網址本來就公開、自己驗證內容（檢查碼／格式），不需要 CORS 保護。
+        // （付款通知是伺服器對伺服器，不會帶 Origin，一起列進來比較保險）
+        return request -> CALLBACK_PATHS.contains(request.getRequestURI()) ? null : source.getCorsConfiguration(request);
     }
 }

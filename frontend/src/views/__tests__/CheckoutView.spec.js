@@ -6,10 +6,12 @@ import { createPinia, setActivePinia } from 'pinia'
 vi.mock('@/api/catalog', () => ({ getProduct: vi.fn(), getShippingMethods: vi.fn() }))
 vi.mock('@/api/orders', () => ({ createOrder: vi.fn(), getOrder: vi.fn(), getCheckoutToken: vi.fn() }))
 vi.mock('@/api/payments', () => ({ getPaymentOptions: vi.fn(), startPayment: vi.fn(), redirectToPayment: vi.fn() }))
+vi.mock('@/api/logistics', () => ({ getLogisticsOptions: vi.fn(), getCvsMapForm: vi.fn(), redirectToCvsMap: vi.fn() }))
 
 import { getProduct, getShippingMethods } from '@/api/catalog'
 import { createOrder, getCheckoutToken } from '@/api/orders'
 import { getPaymentOptions, redirectToPayment, startPayment } from '@/api/payments'
+import { getCvsMapForm, getLogisticsOptions, redirectToCvsMap } from '@/api/logistics'
 import { ApiError } from '@/api/http'
 import { routes } from '@/router'
 import { useAuthStore } from '@/stores/auth'
@@ -24,9 +26,9 @@ const METHODS = [
   { code: 'CVS_PICKUP', name: '超商取貨', fee: 60 },
 ]
 
-async function mountCheckout() {
+async function mountCheckout(path = '/checkout') {
   const router = createRouter({ history: createMemoryHistory(), routes })
-  await router.push('/checkout')
+  await router.push(path)
   const wrapper = mount(CheckoutView, { global: { plugins: [router] }, attachTo: document.body })
   await settle()
   return { wrapper, router }
@@ -51,6 +53,7 @@ describe('CheckoutView', () => {
     vi.mocked(getCheckoutToken).mockResolvedValue({ token: 'token-1', expiresInSeconds: 1800 })
     vi.mocked(getPaymentOptions).mockReset()
     vi.mocked(getPaymentOptions).mockResolvedValue({ onlinePaymentEnabled: false, paymentTimeoutMinutes: 30 })
+    vi.mocked(getLogisticsOptions).mockResolvedValue({ cvsMapEnabled: false })
     vi.mocked(startPayment).mockReset()
     vi.mocked(redirectToPayment).mockReset()
   })
@@ -213,6 +216,7 @@ describe('CheckoutView 線上付款（P01）', () => {
     vi.mocked(startPayment).mockReset()
     vi.mocked(redirectToPayment).mockReset()
     vi.mocked(getPaymentOptions).mockResolvedValue({ onlinePaymentEnabled: true, paymentTimeoutMinutes: 30 })
+    vi.mocked(getLogisticsOptions).mockResolvedValue({ cvsMapEnabled: false })
   })
 
   async function chooseOnline(wrapper) {
@@ -262,6 +266,121 @@ describe('CheckoutView 線上付款（P01）', () => {
 
     await vi.waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/orders/M2611140000000001'))
     expect(redirectToPayment).not.toHaveBeenCalled()
+  })
+})
+
+describe('CheckoutView 超商電子地圖（P02）', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    sessionStorage.clear()
+    document.body.innerHTML = ''
+    setActivePinia(createPinia())
+    useAuthStore().setSession({ accessToken: 't', user: { name: '王小明', phone: '0912345678', role: 'USER' } })
+    vi.mocked(getProduct).mockResolvedValue(tote)
+    vi.mocked(getShippingMethods).mockResolvedValue(METHODS)
+    vi.mocked(getCheckoutToken).mockResolvedValue({ token: 'token-1', expiresInSeconds: 1800 })
+    vi.mocked(createOrder).mockReset()
+    vi.mocked(createOrder).mockResolvedValue({ orderNo: 'M2611140000000009', paymentMethod: 'COD' })
+    vi.mocked(getPaymentOptions).mockResolvedValue({ onlinePaymentEnabled: false, paymentTimeoutMinutes: 30 })
+    vi.mocked(getLogisticsOptions).mockResolvedValue({ cvsMapEnabled: true })
+    vi.mocked(getCvsMapForm).mockReset()
+    vi.mocked(redirectToCvsMap).mockReset()
+    useCartStore().addItem(tote, 1)
+  })
+
+  async function chooseCvs(wrapper) {
+    await wrapper.findAll('.el-radio').find((r) => r.text().includes('超商取貨')).find('input').setValue(true)
+    await settle()
+  }
+
+  async function chooseBrand(wrapper, label) {
+    await wrapper.find('.el-select').trigger('click')
+    await settle()
+    ;[...document.querySelectorAll('.el-select-dropdown__item')].find((o) => o.textContent.includes(label)).click()
+    await settle()
+  }
+
+  it('有開電子地圖：不顯示手動填寫的欄位，沒選門市不能送出', async () => {
+    const { wrapper } = await mountCheckout()
+    await chooseCvs(wrapper)
+
+    expect(wrapper.text()).toContain('選擇門市')
+    expect(wrapper.text()).not.toContain('門市店號')
+    await chooseBrand(wrapper, '7-ELEVEN')
+    await wrapper.find('form').trigger('submit')
+
+    await vi.waitFor(() => expect(wrapper.text()).toContain('請選擇取貨門市'))
+    expect(createOrder).not.toHaveBeenCalled()
+  })
+
+  it('按「選擇門市」：先暫存表單，再整頁跳到電子地圖（貨到付款要能代收貨款的門市）', async () => {
+    const mapForm = { action: 'https://logistics-stage.ecpay.com.tw/Express/map', fields: { LogisticsSubType: 'UNIMARTC2C' } }
+    vi.mocked(getCvsMapForm).mockResolvedValue(mapForm)
+    const { wrapper } = await mountCheckout()
+    await chooseCvs(wrapper)
+    await chooseBrand(wrapper, '7-ELEVEN')
+    await input(wrapper, '備註（選填）').setValue('請放門市')
+
+    await wrapper.find('.map-button').trigger('click')
+    await settle()
+
+    expect(getCvsMapForm).toHaveBeenCalledWith({ brand: 'SEVEN', collection: true, mobile: false })
+    expect(redirectToCvsMap).toHaveBeenCalledWith(mapForm)
+    expect(wrapper.text()).toContain('正在前往超商電子地圖')
+    const draft = JSON.parse(sessionStorage.getItem('mamashop.checkoutDraft'))
+    expect(draft).toMatchObject({ shippingMethod: 'CVS_PICKUP', cvsBrand: 'SEVEN', note: '請放門市', recipientName: '王小明' })
+  })
+
+  it('沒選超商就按「選擇門市」：提示先選超商', async () => {
+    const { wrapper } = await mountCheckout()
+    await chooseCvs(wrapper)
+
+    await wrapper.find('.map-button').trigger('click')
+
+    await vi.waitFor(() => expect(wrapper.text()).toContain('請選擇超商'))
+    expect(getCvsMapForm).not.toHaveBeenCalled()
+  })
+
+  it('從電子地圖回來：拿回暫存的表單、填入門市、清掉網址參數，送出時帶門市', async () => {
+    sessionStorage.setItem('mamashop.checkoutDraft', JSON.stringify({
+      shippingMethod: 'CVS_PICKUP', recipientName: '王大明', recipientPhone: '0987654321', cvsBrand: 'SEVEN', note: '謝謝', paymentMethod: 'COD',
+    }))
+    const { wrapper, router } = await mountCheckout(
+      '/checkout?cvsBrand=SEVEN&cvsStoreCode=131386&cvsStoreName=' + encodeURIComponent('建盛門市') +
+        '&cvsStoreAddress=' + encodeURIComponent('台北市中正區'),
+    )
+
+    expect(router.currentRoute.value.fullPath).toBe('/checkout')
+    expect(wrapper.text()).toContain('7-ELEVEN 建盛門市（店號 131386）')
+    expect(wrapper.text()).toContain('台北市中正區')
+    expect(input(wrapper, '姓名').element.value).toBe('王大明')
+    expect(sessionStorage.getItem('mamashop.checkoutDraft')).toBeNull() // 拿一次就刪掉
+
+    await wrapper.find('form').trigger('submit')
+    await vi.waitFor(() => expect(createOrder).toHaveBeenCalled())
+    expect(vi.mocked(createOrder).mock.calls[0][0]).toMatchObject({
+      shippingMethod: 'CVS_PICKUP', recipientName: '王大明', recipientPhone: '0987654321',
+      cvsBrand: 'SEVEN', cvsStoreCode: '131386', cvsStoreName: '建盛門市', shippingAddress: null, note: '謝謝',
+    })
+    expect(vi.mocked(createOrder).mock.calls[0][0]).not.toHaveProperty('cvsStoreAddress')
+  })
+
+  it('換了超商品牌：清掉之前選的門市', async () => {
+    const { wrapper } = await mountCheckout('/checkout?cvsBrand=SEVEN&cvsStoreCode=131386&cvsStoreName=A')
+    expect(wrapper.text()).toContain('店號 131386')
+
+    await chooseBrand(wrapper, '全家')
+
+    expect(wrapper.text()).not.toContain('店號 131386')
+    expect(wrapper.find('.map-button').text()).toBe('選擇門市')
+  })
+
+  it('地圖回傳的門市資料有誤：顯示訊息請重選', async () => {
+    const { wrapper, router } = await mountCheckout('/checkout?cvsMapError=1')
+
+    expect(router.currentRoute.value.fullPath).toBe('/checkout')
+    await chooseCvs(wrapper)
+    expect(wrapper.text()).toContain('門市資料有誤，請重新選擇門市')
   })
 })
 

@@ -115,6 +115,11 @@ services:
       ECPAY_HASH_IV: ${ECPAY_HASH_IV:-}
       ECPAY_CASHIER_URL: ${ECPAY_CASHIER_URL:-https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5}
       ORDER_PAYMENT_TIMEOUT: ${ORDER_PAYMENT_TIMEOUT:-30m}
+      # 超商電子地圖（P02）。沒設定 = 結帳手動填門市
+      ECPAY_LOGISTICS_ENABLED: ${ECPAY_LOGISTICS_ENABLED:-false}
+      ECPAY_LOGISTICS_MERCHANT_ID: ${ECPAY_LOGISTICS_MERCHANT_ID:-}
+      ECPAY_LOGISTICS_C2C: ${ECPAY_LOGISTICS_C2C:-true}
+      ECPAY_LOGISTICS_MAP_URL: ${ECPAY_LOGISTICS_MAP_URL:-https://logistics.ecpay.com.tw/Express/map}
       DB_HOST: db
       DB_PORT: 5432
       DB_NAME: ${DB_NAME}
