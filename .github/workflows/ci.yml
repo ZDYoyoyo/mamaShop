@@ -1,0 +1,147 @@
+# CI（D06）：每個 PR 自動跑測試與建置，全部通過才代表可以合併。
+#
+# 三個 job 同時跑（互不相依，等最久的那個就好）：
+#   backend   後端測試（JUnit，需要 PostgreSQL）
+#   frontend  前端 lint、單元測試、建置
+#   docker    建置正式環境的兩個映像檔（確認 Dockerfile 沒壞），並檢查 docker-compose.prod.yml
+#
+# 在 GitHub 的 repo → Actions 分頁可以看到每次執行的結果與 log。
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  # 允許在 Actions 分頁手動執行
+  workflow_dispatch:
+
+# 同一個 PR 推了新的 commit：取消還在跑的舊執行，省時間也省額度
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# 最小權限：CI 只需要讀程式碼
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: 後端測試
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # 測試用的 PostgreSQL：GitHub 會在 job 開始前啟動這個容器，job 結束後丟掉
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: mamashop_test
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci-password
+        ports:
+          - 5432:5432
+        # 等資料庫真的可以連線才開始跑步驟
+        options: >-
+          --health-cmd "pg_isready -U ci -d mamashop_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    # 後端讀這些環境變數（和本機的 .env 一樣）。CI 沒有 .env，也不設定 APP_PROFILE：不載入測試商品
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: mamashop_test
+      DB_USERNAME: ci
+      DB_PASSWORD: ci-password
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          # 快取 ~/.m2：pom.xml 沒變時不用重新下載依賴（快好幾分鐘）
+          cache: maven
+
+      # JWT 密鑰每次隨機產生（不寫死在檔案裡；只給這次測試用，跑完就丟）
+      - name: 產生測試用 JWT_SECRET
+        run: echo "JWT_SECRET=$(openssl rand -base64 48)" >> "$GITHUB_ENV"
+
+      - name: 執行測試
+        run: ./mvnw -B test
+
+      # 測試失敗時上傳報告，可以在 Actions 頁面下載來看詳細的錯誤
+      - name: 上傳測試報告（失敗時）
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: surefire-reports
+          path: backend/target/surefire-reports/
+          retention-days: 7
+
+  frontend:
+    name: 前端 lint、測試、建置
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          # 快取 npm 下載的套件
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # npm ci：完全照 package-lock.json 安裝，和開發時的版本一模一樣
+      - run: npm ci
+
+      # 只檢查、不自動修正（package.json 的 lint 會加 --fix，CI 裡修了也沒人看到）。
+      # 警告也算失敗：不讓警告越積越多
+      - name: Lint
+        run: |
+          npx oxlint . --deny-warnings
+          npx eslint . --max-warnings 0
+
+      - name: 單元測試
+        run: npx vitest run
+
+      - name: 建置
+        run: npm run build
+
+  docker:
+    name: 建置正式環境映像檔
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # 用範本加上假的密碼檢查 docker-compose.prod.yml 的語法與必填變數（不會啟動任何東西）
+      - name: 檢查 docker-compose.prod.yml
+        run: |
+          cp deploy/.env.example deploy/.env
+          sed -i -e 's/^DB_PASSWORD=$/DB_PASSWORD=ci/' -e 's/^JWT_SECRET=$/JWT_SECRET=ci/' deploy/.env
+          docker compose -f deploy/docker-compose.prod.yml config --quiet
+
+      - name: 建置後端映像檔
+        run: docker build -t mamashop-backend ./backend
+
+      - name: 建置前端（Nginx）映像檔
+        run: docker build -t mamashop-web -f deploy/nginx/Dockerfile .
+
+      # 用剛建好的映像檔檢查 Nginx 設定檔語法（nginx -t）。
+      # 設定裡的 backend 主機名稱在這裡不存在，用 --add-host 給一個假的位址
+      - name: 檢查 Nginx 設定
+        run: docker run --rm --add-host backend:127.0.0.1 mamashop-web nginx -t

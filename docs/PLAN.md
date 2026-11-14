@@ -166,7 +166,7 @@ mamaShop/
 - [ ] **D03 正式環境部署**：`deploy/docker-compose.prod.yml` 包含 Nginx、後端、PostgreSQL；Nginx 提供前端靜態檔並把 `/api` 轉給後端；資料庫不對外開放；伺服器上的 `.env` 不進版控（📄 設定檔與部署指南已完成：`docs/deploy/D03-deploy.md`，已在本機用正式設定完整驗證，待主機實際部署）
 - [ ] **D04 HTTPS**：Let's Encrypt 憑證與自動續期
 - [ ] **D05 備份**：每日 `pg_dump` 與圖片目錄備份、保留天數、複製到主機以外的地方；**實際做一次還原測試**
-- [ ] **D06 CI**：GitHub Actions 在 PR 時自動跑測試與前端建置；之後可加自動部署
+- [x] **D06 CI**：GitHub Actions 在 PR 時自動跑測試與前端建置；之後可加自動部署
 - [ ] **D07 基本監控**：Spring Boot Actuator 健康檢查、Docker log 輪替、外部服務定期檢查網站是否正常
 - [ ] **D08 上線檢查**：更換預設管理員密碼、隱私權政策頁面、用手機完整走一次下單到出貨、請家人試用一週再正式開放
 

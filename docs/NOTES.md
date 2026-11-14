@@ -626,3 +626,25 @@ F02～F06 做頁面時已經有載入中（骨架畫面）、錯誤、空狀態�
 - 🔲 **沒有零停機更新**：更新後端時約 10～20 秒回 502（前端顯示「伺服器暫時無法使用」）。家庭小店可以接受；需要的話之後用兩個後端容器輪流更新
 - 🔲 **在主機上建置映像檔**：簡單但慢、吃記憶體。D06（CI）之後可以改成 GitHub Actions 建好映像檔、主機只負責下載
 - 🔲 HTTPS、HSTS 在 D04；log 輪替、健康檢查在 D07；備份在 D05
+
+## D06 CI（GitHub Actions）
+
+`.github/workflows/ci.yml`：PR、推到 main、手動觸發時執行。三個 job 平行跑：
+
+| Job | 做什麼 |
+|---|---|
+| 後端測試 | PostgreSQL 17 service container＋`./mvnw -B test`；失敗時上傳 surefire 報告（保留 7 天） |
+| 前端 | `npm ci` → oxlint、eslint（只檢查不修正、警告也算失敗）→ vitest → `npm run build` |
+| 正式環境映像檔 | 檢查 `docker-compose.prod.yml`（用範本＋假密碼）→ 建置後端、Nginx 映像檔 → `nginx -t` |
+
+- ℹ️ **CI 的後端測試跑在全新的空資料庫、沒有 `APP_PROFILE`（不載入測試商品）、只靠環境變數**。先在本機用一樣的條件模擬：287 個測試全部通過，確認測試沒有偷偷依賴本機的測試資料；測試結束後資料庫 0 筆商品（測試自己建、自己清）
+- ℹ️ **JWT_SECRET 每次隨機產生**（`openssl rand` 寫進 `$GITHUB_ENV`），不寫死在 workflow 裡
+- ℹ️ **lint 只檢查**：`package.json` 的 `lint` 會 `--fix`，CI 裡自動修了也沒人看到，所以直接呼叫 `oxlint --deny-warnings`、`eslint --max-warnings 0`
+- ℹ️ **docker job 補上 D03 在雲端環境測不到的部分**：GitHub 的機器沒有代理問題，`backend/Dockerfile` 的建置階段（Maven wrapper 下載）在這裡完整驗證
+- ℹ️ 同一個 PR 推新 commit 時取消還在跑的舊執行（`concurrency`）；權限只給 `contents: read`；Maven、npm 都有快取
+- ℹ️ 本機用 `actionlint` 檢查過 workflow 語法；compose config、`nginx -t` 兩個步驟也在本機模擬過
+- 🔲 **還沒設定「CI 沒過不能合併」**：要在 GitHub repo → Settings → Branches → Add branch protection rule（`main`）→ 勾選 Require status checks to pass，選這三個 job。這是 repo 設定，需要你自己在網頁上勾
+- 🔲 **沒有自動部署**（PLAN 寫「之後可加」）：主機（D01）還沒準備好。之後可以在 main 通過 CI 後，用 SSH 連到主機執行 D03 的更新指令；或在 CI 建好映像檔推到 GitHub Container Registry，主機只負責下載（比在 2GB 主機上建置快很多）
+- ℹ️ **第一次執行的實際結果**：三個 job 約 1.5 分鐘全部通過；log 確認 `Tests run: 287, Failures: 0`、`No active profile set`（沒有載入測試資料）。推新 commit 時舊的執行被自動取消（concurrency 有效）
+- ℹ️ 第一次執行時 GitHub 警告 `actions/checkout@v4`、`setup-java@v4` 用的 Node.js 20 已淘汰，改成 `@v5`（Node.js 24）
+- 🔲 **action 用大版本標籤**（`@v5`）而不是固定的 commit SHA：比較好讀、會自動拿到修正版；代價是理論上 action 被竄改時會受影響。這個專案只用 GitHub 官方的 action，風險低
