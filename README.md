@@ -17,6 +17,7 @@ mamaShop/
 ├── backend/           # Spring Boot
 ├── frontend/          # Vue 3（前台與後台同一個 app，用路由區分）
 ├── deploy/            # 正式環境：docker-compose.prod.yml、Nginx（nginx/）、主機設定（server/）、檢查腳本（scripts/）
+├── loadtest/         # k6 壓力測試腳本與基準數據（R00）
 ├── docs/PLAN.md       # 專案計畫與任務清單
 ├── docs/deploy/       # 部署操作指南（D01 起，每個指令都有說明）
 ├── CLAUDE.md          # AI 協作規則
