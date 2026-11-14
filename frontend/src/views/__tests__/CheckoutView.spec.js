@@ -5,9 +5,11 @@ import { createPinia, setActivePinia } from 'pinia'
 
 vi.mock('@/api/catalog', () => ({ getProduct: vi.fn(), getShippingMethods: vi.fn() }))
 vi.mock('@/api/orders', () => ({ createOrder: vi.fn(), getOrder: vi.fn(), getCheckoutToken: vi.fn() }))
+vi.mock('@/api/payments', () => ({ getPaymentOptions: vi.fn(), startPayment: vi.fn(), redirectToPayment: vi.fn() }))
 
 import { getProduct, getShippingMethods } from '@/api/catalog'
 import { createOrder, getCheckoutToken } from '@/api/orders'
+import { getPaymentOptions, redirectToPayment, startPayment } from '@/api/payments'
 import { ApiError } from '@/api/http'
 import { routes } from '@/router'
 import { useAuthStore } from '@/stores/auth'
@@ -47,6 +49,10 @@ describe('CheckoutView', () => {
     vi.mocked(createOrder).mockResolvedValue({ orderNo: 'M2611120000000001' })
     vi.mocked(getCheckoutToken).mockReset()
     vi.mocked(getCheckoutToken).mockResolvedValue({ token: 'token-1', expiresInSeconds: 1800 })
+    vi.mocked(getPaymentOptions).mockReset()
+    vi.mocked(getPaymentOptions).mockResolvedValue({ onlinePaymentEnabled: false, paymentTimeoutMinutes: 30 })
+    vi.mocked(startPayment).mockReset()
+    vi.mocked(redirectToPayment).mockReset()
   })
 
   it('購物車是空的時候回購物車頁', async () => {
@@ -92,6 +98,7 @@ describe('CheckoutView', () => {
       cvsStoreCode: null,
       cvsStoreName: null,
       note: null,
+      paymentMethod: 'COD',
     }, 'token-1') // 進入結帳頁時取得的一次性識別碼（R02）
     expect(cart.items).toEqual([])
   })
@@ -189,6 +196,72 @@ describe('CheckoutView', () => {
 
     expect(vi.mocked(createOrder).mock.calls.map((call) => call[1])).toEqual(['token-1', 'token-1'])
     expect(getCheckoutToken).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('CheckoutView 線上付款（P01）', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    document.body.innerHTML = ''
+    setActivePinia(createPinia())
+    useAuthStore().setSession({ accessToken: 't', user: { name: '王小明', phone: '0912345678', role: 'USER' } })
+    vi.mocked(getProduct).mockResolvedValue(tote)
+    vi.mocked(getShippingMethods).mockResolvedValue(METHODS)
+    vi.mocked(getCheckoutToken).mockResolvedValue({ token: 'token-1', expiresInSeconds: 1800 })
+    vi.mocked(createOrder).mockReset()
+    vi.mocked(createOrder).mockResolvedValue({ orderNo: 'M2611140000000001', paymentMethod: 'ONLINE' })
+    vi.mocked(startPayment).mockReset()
+    vi.mocked(redirectToPayment).mockReset()
+    vi.mocked(getPaymentOptions).mockResolvedValue({ onlinePaymentEnabled: true, paymentTimeoutMinutes: 30 })
+  })
+
+  async function chooseOnline(wrapper) {
+    await wrapper.findAll('.el-radio').find((r) => r.text().includes('線上付款')).find('input').setValue(true)
+    await settle()
+  }
+
+  it('後端沒開線上付款（或查詢失敗）：只顯示貨到付款', async () => {
+    vi.mocked(getPaymentOptions).mockRejectedValue(new Error('network'))
+    useCartStore().addItem(tote, 1)
+    const { wrapper } = await mountCheckout()
+
+    expect(wrapper.text()).toContain('貨到付款：收到商品時付款')
+    expect(wrapper.text()).not.toContain('線上付款')
+  })
+
+  it('選線上付款：送出 ONLINE，接著前往付款（整頁跳到綠界）', async () => {
+    const form = { action: 'https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5', fields: { MerchantTradeNo: 'M261114000000000101' } }
+    vi.mocked(startPayment).mockResolvedValue(form)
+    const cart = useCartStore()
+    cart.addItem(tote, 1)
+    const { wrapper } = await mountCheckout()
+    await chooseOnline(wrapper)
+    expect(wrapper.text()).toContain('30 分鐘內完成付款')
+    expect(wrapper.find('button.submit').text()).toBe('確認下單並前往付款')
+    await input(wrapper, '收件地址').setValue('台北市')
+
+    await wrapper.find('form').trigger('submit')
+
+    await vi.waitFor(() => expect(redirectToPayment).toHaveBeenCalledWith(form))
+    expect(vi.mocked(createOrder).mock.calls[0][0].paymentMethod).toBe('ONLINE')
+    expect(startPayment).toHaveBeenCalledWith('M2611140000000001')
+    expect(cart.items).toEqual([])
+    // 頁面離開前顯示「正在前往」，不會閃一下空的購物車、也不能再按一次
+    expect(wrapper.text()).toContain('正在前往綠界付款頁')
+    expect(wrapper.find('button.submit').exists()).toBe(false)
+  })
+
+  it('訂單成立但前往付款失敗：導向訂單頁（那裡可以再付款）', async () => {
+    vi.mocked(startPayment).mockRejectedValue(new ApiError({ status: 500, code: 'INTERNAL_ERROR', message: '系統錯誤' }))
+    useCartStore().addItem(tote, 1)
+    const { wrapper, router } = await mountCheckout()
+    await chooseOnline(wrapper)
+    await input(wrapper, '收件地址').setValue('台北市')
+
+    await wrapper.find('form').trigger('submit')
+
+    await vi.waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/orders/M2611140000000001'))
+    expect(redirectToPayment).not.toHaveBeenCalled()
   })
 })
 

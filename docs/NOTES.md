@@ -993,3 +993,120 @@ docker compose -f deploy/docker-compose.prod.yml exec rabbitmq rabbitmqctl set_p
   - 第一次寄信失敗、第二次成功 → 只寄 2 次、失敗佇列是空的
   - 一直失敗 → 正好試 3 次，訊息進失敗佇列，內容有訂單編號，header 有錯誤訊息與原本的 routing key，之後不再重試
 - ℹ️ 原本 M01、M02 的整合測試照樣通過。後端 333 個測試全部通過
+
+## P01 第三方線上金流（綠界 ECPay 信用卡）
+
+### 流程
+
+```
+顧客結帳選「線上付款」→ 訂單「待付款」（庫存已扣），排定 30 分鐘後未付款自動取消（M02 的延遲任務）
+  │
+  ├─ 前端呼叫 POST /api/orders/{orderNo}/payment
+  │    後端：鎖住訂單 → 建立 payments 一筆（交易編號 = 訂單編號＋兩位數序號）→ 算檢查碼 → 回傳表單欄位
+  ├─ 前端組一個 form，整頁 POST 到綠界付款頁；顧客在綠界輸入信用卡（卡號不經過我們的伺服器）
+  │
+  ├─ 綠界「伺服器對伺服器」通知 POST /api/payments/ecpay/notify（ReturnURL）
+  │    後端：驗證檢查碼 → 商店代號 → 鎖住訂單 → 這筆已付款？（重複通知）→ 模擬付款？→ 金額相符？
+  │          → 成功：付款紀錄 PAID、訂單「備貨中＋已付款」、寄「已收到付款」的信 → 回 1|OK
+  │
+  └─ 顧客按「返回商店」回到 /orders/{orderNo}?from=payment
+       前端：還是「待付款」就每 3 秒重讀（最多 30 秒）——回到網站不代表付款成功，只看後端的狀態
+
+30 分鐘到 → 還是「待付款」→ 取消、歸還庫存（狀態紀錄「系統」）；已付款就略過
+```
+
+### 設計（和傳統做法的差別、為什麼這樣做）
+
+- ℹ️ **付款結果只相信綠界的伺服器通知**（PLAN 的要求）：顧客瀏覽器帶回來的東西都可以偽造，只用來「回到訂單頁」。通知的參數有**檢查碼**（SHA-256，只有綠界和我們知道 HashKey／HashIV），算出來不一樣就拒絕
+- ℹ️ **檢查碼算法用綠界文件的範例當單元測試**，並在本機用測試商店**實際送到綠界測試環境**：
+  - 後端產生的表單（含中文商品名）綠界接受、顯示付款頁、金額正確
+  - 簽錯會回「CheckMacValue Error」
+  - Java 的 URLEncoder 和綠界用的 .NET UrlEncode 差在 `! ( )`，要換回來（`EcpayCheckMacValue`）
+- ℹ️ **比對檢查碼用 `MessageDigest.isEqual`**（比較時間固定），不用 `equals`（理論上可以從回應時間一個字一個字猜，timing attack）
+- ℹ️ **一張訂單、多筆付款嘗試（新的 `payments` 表）**：
+  - 綠界的交易編號不能重複使用，顧客關掉付款頁再付一次就要新的編號
+  - 每次嘗試的結果（綠界交易編號、付款方式、失敗原因）都留著，查帳、退款用
+- ℹ️ **冪等（重複通知）**：綠界沒收到 `1|OK` 會重送，也可能同時送兩次。鎖住訂單後看付款紀錄已經是 PAID 就直接回 `1|OK`，不會再寄信、再改狀態
+- ℹ️ **悲觀鎖（`SELECT ... FOR UPDATE`）而不是只靠 `@Version`**：
+  - 付款通知、逾時取消、顧客按「前往付款」都可能同時發生，而且都是「系統」，沒有人可以看到 409 再按一次
+  - 鎖住的話，後到的一方**等**前一方做完、再看最新狀態處理
+  - 後台管理員的操作還是用版本號比對：要知道「畫面上看到的是不是最新的」，這是鎖解決不了的
+- ⚠️ **踩到的坑：Hibernate 的一級快取讓 `FOR UPDATE` 讀到舊資料**（併發測試抓到的）：
+  - 原本查付款紀錄時 `JOIN FETCH` 了訂單，之後再用 `FOR UPDATE` 查訂單
+  - 資料庫有等鎖，但 Hibernate 發現訂單已經在記憶體（persistence context）裡，**回傳舊的物件** → 用舊版本號更新 → `ObjectOptimisticLockingFailureException`
+  - 修正：**先鎖、再讀**。付款通知先只查「訂單編號」（不載入 entity），第一次載入訂單就是加鎖的那一次
+  - 所有流程都是「先鎖訂單、再讀付款」，順序一致也不會互相等待（deadlock）
+- ℹ️ **取消後才付款成功（逾時取消和付款同時，或顧客在付款頁拖太久）**：
+  - 訂單**維持已取消**，不「復活」：庫存已經還回去、可能被別人買走了
+  - 標記「已付款」，狀態紀錄寫「請到綠界後台退款」，log 記 ERROR，後台訂單頁顯示紅色退款提醒
+  - 同一張訂單付了兩次（開了兩個付款頁）也一樣
+- ℹ️ **付款期限前 10 分鐘就不能再開付款頁**：降低「付到一半被取消」的機率
+- ℹ️ **只開信用卡（`ChoosePayment=Credit`）**：
+  - ATM、超商代碼要等顧客去繳費，可能超過付款期限
+  - 綠界測試環境的付款頁還會顯示 Apple Pay、街口等即時付款，一樣走同一個通知
+- ℹ️ **綠界測試後台的「模擬付款」（`SimulatePaid=1`）不改訂單**：沒有真的收到錢
+- ℹ️ **金額有小數不能線上付款**：綠界只收整數。下單時就擋，請顧客改貨到付款
+- ℹ️ 訂單模組不依賴綠界：
+  - payment 模組呼叫 `AdminOrderService.onlinePaymentReceived`／`autoCancelUnpaid`
+  - 逾時取消用 M02 的 TTL＋死信佇列（另一組等待佇列），失敗走 M03 的失敗佇列
+- ℹ️ **CSP 的 `form-action` 加上綠界的兩個網址**：前往付款是表單 POST 到綠界，沒加的話瀏覽器會擋（D03 的 security-headers.conf）
+- ℹ️ 通知信依付款方式調整文字：線上付款不寫「收到商品時付款」，成立時提醒付款期限，付款後寫「已收到您的付款」
+
+### 設定
+
+| 環境變數 | 本機（`.env.example`） | 正式環境（`deploy/.env`） |
+|---|---|---|
+| `ECPAY_ENABLED` | `true` | 簽約前 `false`（只有貨到付款） |
+| `ECPAY_MERCHANT_ID`／`HASH_KEY`／`HASH_IV` | 綠界**公開的測試商店** 3002607 | 綠界廠商後台 → 系統開發管理 → 系統介接設定 |
+| `ECPAY_CASHIER_URL` | 預設測試環境 | 預設正式環境（prod compose） |
+| `ORDER_PAYMENT_TIMEOUT` | 30m | 30m |
+
+- ⚠️ HashKey／HashIV 外洩 = 任何人都能偽造「付款成功」，和 `JWT_SECRET` 同等級的機密，只放在主機的 `deploy/.env`
+- ⚠️ `ECPAY_ENABLED=true` 但沒填完整 → 後端**啟動就失敗**（`EcpayProperties`），不要等到顧客付款才發現
+- 測試信用卡：`4311-9522-2222-2222`，有效期限任何未來的月年，安全碼 `222`（3D 驗證碼依綠界測試頁指示）
+
+### 刻意沒做／之後要注意
+
+- 🔲 **本機收不到綠界的通知**：ReturnURL 必須是外面連得到的網址（`SITE_URL`），本機是 localhost。本機是用 curl 自己算檢查碼「假裝綠界」送通知來驗證（NOTES 下面的指令）；**完整流程要等 D04（HTTPS 網域）上線後，用測試商店實際刷一次測試卡**
+- 🔲 **退款沒有串 API**：目前是後台看到「已取消＋已付款」的提醒後，到綠界廠商後台手動退款。家庭小店的量手動就夠
+- 🔲 **沒有主動查詢交易（QueryTradeInfo）**：如果綠界的通知一直送不到（我們的伺服器剛好掛了很久），訂單會停在待付款、然後被逾時取消，但錢已經扣了。綠界會重送通知幾次；之後可以加「取消前先問綠界這筆有沒有付款」
+- 🔲 後台訂單列表沒有「需要退款」的篩選，要點進訂單才看得到紅色提醒
+- 🔲 沒有開發票（電子發票要另外串，PLAN 有提到法規要求）
+- ⚠️ **正式上線前**：和綠界簽約、確認費用與撥款方式（PLAN 的提醒），用正式商店資料先刷一筆小額再退款確認
+
+### 測試
+
+- ℹ️ `EcpayCheckMacValueTest`：綠界文件範例的檢查碼完全一致；竄改金額、錯的 HashKey、沒有檢查碼都不通過；大小寫不影響
+- ℹ️ `PaymentIntegrationTest`（真的資料庫，通知用 MockMvc 送 form 到真的 API、不帶 JWT）：
+  - 下單是待付款、表單欄位與檢查碼正確、第二次前往付款換新的交易編號
+  - 別人的訂單 404、貨到付款的訂單、已付款的訂單不能再付
+  - 付款成功 → 備貨中＋已付款、狀態紀錄是「系統」
+  - 同一筆通知送 3 次只處理一次
+  - 偽造、竄改、金額不符、模擬付款都不改訂單；付款失敗訂單維持待付款、可以再付
+  - 逾時取消歸還庫存；取消後才付款 → 維持已取消、標記退款；付款後逾時 → 不取消
+  - **併發**：付款通知和逾時取消同一瞬間（10 輪）→ 結果一定一致；同一筆通知同時 5 次 → 只處理一次
+- ℹ️ `OrderPaymentTimeoutIntegrationTest`（真的 RabbitMQ，期限縮成 2 秒）：沒付款 → 取消、庫存還原；貨到付款不排定
+- ℹ️ `OrderServiceTest`：線上付款下單是待付款並排定逾時；沒開線上付款、金額有小數會被擋
+- ℹ️ 前端：結帳頁選線上付款 → 下單後前往綠界；前往付款失敗導向訂單頁；訂單頁顯示付款期限、從綠界回來會重讀狀態
+- ℹ️ 後端 360、前端 182 個測試全部通過
+- ℹ️ **實測**（本機後端＋綠界測試環境）：
+  - API 下單 → 前往付款 → 表單送到綠界，回應「選擇支付方式」頁、金額 NT$280、中文商品名正確
+  - 自己算檢查碼送通知：第一次 `1|OK`、訂單備貨中＋已付款；重複 `1|OK`；竄改 `0|CheckMacValue Error`
+  - Mailpit 收到「訂單已成立（線上付款）」和「已收到您的付款」兩封
+  - 手機畫面（Playwright）：訂單頁顯示付款期限與按鈕，按下後跳到綠界測試付款頁
+
+本機模擬綠界通知（把訂單編號換成自己的；HashKey／HashIV 是公開的測試值）：
+
+```bash
+python3 - M2611140000000001 <<'PY' > notify.txt
+import sys, hashlib, urllib.parse
+KEY, IV = 'pwFHCqoQZGmho4w6', 'EkRm7iFT261dpevs'
+p = {'MerchantID': '3002607', 'MerchantTradeNo': sys.argv[1] + '01', 'RtnCode': '1', 'RtnMsg': '交易成功',
+     'TradeNo': '2511140000000001', 'TradeAmt': '280', 'PaymentType': 'Credit_CreditCard', 'SimulatePaid': '0'}
+s = 'HashKey=' + KEY + '&' + '&'.join(f'{k}={p[k]}' for k in sorted(p, key=str.lower)) + '&HashIV=' + IV
+e = urllib.parse.quote_plus(s).lower().replace('%21', '!').replace('%28', '(').replace('%29', ')')
+p['CheckMacValue'] = hashlib.sha256(e.encode()).hexdigest().upper()
+print(urllib.parse.urlencode(p))
+PY
+curl -X POST localhost:8080/api/payments/ecpay/notify -H 'content-type: application/x-www-form-urlencoded' --data @notify.txt
+```

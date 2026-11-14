@@ -13,6 +13,7 @@ import com.mamashop.order.entity.OrderStatus;
 import com.mamashop.order.entity.OrderStatusHistory;
 import com.mamashop.order.entity.PaymentMethod;
 import com.mamashop.order.entity.PaymentStatus;
+import com.mamashop.order.event.OrderAwaitingPaymentEvent;
 import com.mamashop.order.event.OrderEvent;
 import com.mamashop.order.event.OrderEventType;
 import com.mamashop.order.repository.OrderRepository;
@@ -31,6 +32,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -70,6 +72,13 @@ public class OrderService {
     private final OrderStockService orderStockService;
     private final ApplicationEventPublisher eventPublisher;
 
+    /**
+     * 線上付款有沒有開（P01，有設定綠界的商店資料才開）。
+     * 用欄位注入而不是建構子：只是一個開關，單元測試（@InjectMocks）預設 false，需要時用 ReflectionTestUtils 打開
+     */
+    @Value("${app.payment.ecpay.enabled:false}")
+    private boolean onlinePaymentEnabled;
+
     public OrderService(ProductRepository productRepository,
                         ShippingMethodRepository shippingMethodRepository,
                         OrderRepository orderRepository,
@@ -101,7 +110,13 @@ public class OrderService {
         // 1. 合併重複商品並依 id 排序（TreeMap 會自動排序，排序的原因見 OrderStockService.deduct）
         SortedMap<Long, Integer> quantities = mergeQuantities(request);
 
-        // 2. 運送方式與運費（停用中的不能用）
+        // 2. 付款方式（P01）：線上付款要有設定金流才能用
+        boolean online = request.paymentMethod() == PaymentMethod.ONLINE;
+        if (online && !onlinePaymentEnabled) {
+            throw new BusinessException(ErrorCode.PAYMENT_METHOD_UNAVAILABLE);
+        }
+
+        // 運送方式與運費（停用中的不能用）
         ShippingMethod shippingMethod = shippingMethodRepository.findByCode(request.shippingMethod())
                 .filter(ShippingMethod::isEnabled)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SHIPPING_METHOD_UNAVAILABLE));
@@ -138,6 +153,10 @@ public class OrderService {
         if (totalAmount.compareTo(MAX_ORDER_AMOUNT) > 0) {
             throw new BusinessException(ErrorCode.ORDER_AMOUNT_TOO_LARGE);
         }
+        // 綠界的金額只能是整數（新台幣元）
+        if (online && totalAmount.stripTrailingZeros().scale() > 0) {
+            throw new BusinessException(ErrorCode.ONLINE_PAYMENT_AMOUNT_INVALID);
+        }
 
         // getReferenceById：只建立代理物件、不查詢資料庫（我們只需要 user_id 這個外鍵）
         User customer = userRepository.getReferenceById(userId);
@@ -151,14 +170,21 @@ public class OrderService {
         order.setRecipientPhone(request.recipientPhone());
         order.setNote(request.note());
         applyShippingInfo(order, request);
-        order.setPaymentMethod(PaymentMethod.COD);
+        order.setPaymentMethod(request.paymentMethod());
         order.setPaymentStatus(PaymentStatus.UNPAID);
-        order.setStatus(OrderStatus.PENDING_CONFIRM); // 貨到付款：先待家人確認
+        // 貨到付款：先待家人確認；線上付款：先等付款（金流通知付款成功後才進入備貨，P01）
+        OrderStatus initial = online ? OrderStatus.PENDING_PAYMENT : OrderStatus.PENDING_CONFIRM;
+        order.setStatus(initial);
         orderRepository.save(order); // cascade 會一起 INSERT 所有明細
 
-        historyRepository.save(new OrderStatusHistory(order, null, OrderStatus.PENDING_CONFIRM, customer, "顧客下單"));
+        historyRepository.save(new OrderStatusHistory(order, null, initial, customer,
+                online ? "顧客下單（線上付款）" : "顧客下單"));
         // 通知顧客（M01）：事件在交易 commit 之後才會被處理，下單失敗 rollback 就不會寄信
         eventPublisher.publishEvent(new OrderEvent(order.getOrderNo(), OrderEventType.CREATED));
+        if (online) {
+            // 排定「逾時未付款自動取消」（M02 的延遲任務）
+            eventPublisher.publishEvent(new OrderAwaitingPaymentEvent(order.getOrderNo()));
+        }
 
         return OrderDetailResponse.from(order);
     }

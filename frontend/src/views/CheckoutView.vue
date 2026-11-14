@@ -1,16 +1,19 @@
 <script setup>
 /**
- * 結帳頁（需要登入）：確認商品 → 選運送方式 → 填收件資訊 → 送出（貨到付款）。
+ * 結帳頁（需要登入）：確認商品 → 選運送方式 → 填收件資訊 → 選付款方式 → 送出。
  *
  * - 金額只是「預估」給顧客看，實際金額由後端用最新的價格與運費計算（B08）
  * - 防重複下單有兩層：送出時停用按鈕（前端），以及進入頁面時取得的一次性識別碼（後端，R02）。
  *   同一個識別碼不管送幾次都只會建立一筆訂單（網路不穩重送、按鈕沒擋住的連點）
- * - 成功後移除已下單的品項，導向訂單完成頁
+ * - 成功後移除已下單的品項：貨到付款導向訂單完成頁；
+ *   線上付款（P01）接著呼叫「前往付款」，整頁跳到綠界。前往付款失敗就導向訂單頁，那裡可以再按「前往付款」
+ * - 線上付款要後端有開（/payments/options），沒開或查詢失敗就只顯示貨到付款
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getShippingMethods } from '@/api/catalog'
 import { createOrder, getCheckoutToken } from '@/api/orders'
+import { getPaymentOptions, redirectToPayment, startPayment } from '@/api/payments'
 import LoadError from '@/components/LoadError.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
@@ -40,7 +43,12 @@ const form = reactive({
   cvsStoreCode: '',
   cvsStoreName: '',
   note: '',
+  paymentMethod: 'COD',
 })
+
+/** 線上付款設定（P01）：{ onlinePaymentEnabled, paymentTimeoutMinutes } */
+const paymentOptions = ref({ onlinePaymentEnabled: false, paymentTimeoutMinutes: 30 })
+const isOnline = computed(() => form.paymentMethod === 'ONLINE')
 
 const isHomeDelivery = computed(() => form.shippingMethod === 'HOME_DELIVERY')
 const isCvsPickup = computed(() => form.shippingMethod === 'CVS_PICKUP')
@@ -71,7 +79,14 @@ async function load() {
   loadError.value = ''
   try {
     // 同時更新購物車（價格、庫存可能變了）與取得運送方式
-    const [cartNotices, methods, token] = await Promise.all([cart.refresh(), getShippingMethods(), getCheckoutToken()])
+    const [cartNotices, methods, token, options] = await Promise.all([
+      cart.refresh(),
+      getShippingMethods(),
+      getCheckoutToken(),
+      // 查不到付款設定不影響結帳：當作只有貨到付款
+      getPaymentOptions().catch(() => null),
+    ])
+    if (options) paymentOptions.value = options
     checkoutToken.value = token.token
     notices.value = cartNotices
     shippingMethods.value = methods
@@ -92,12 +107,14 @@ onMounted(() => {
 })
 
 const submitting = ref(false)
+/** 正在跳到綠界：頁面離開前按鈕維持停用，避免再按一次 */
+const redirecting = ref(false)
 const submitError = ref('')
 const serverErrors = ref({})
 
 async function submit() {
   // 已經在送出中就不再送（雙重保險：按鈕本身也會停用）
-  if (submitting.value) return
+  if (submitting.value || redirecting.value) return
   submitError.value = ''
   serverErrors.value = {}
   if (!(await formRef.value.validate().catch(() => false))) return
@@ -116,9 +133,14 @@ async function submit() {
       cvsStoreCode: isCvsPickup.value ? form.cvsStoreCode : null,
       cvsStoreName: isCvsPickup.value ? form.cvsStoreName : null,
       note: form.note || null,
+      paymentMethod: form.paymentMethod,
     }, checkoutToken.value)
     cart.removeItems(orderedItems.map((item) => item.productId))
-    router.replace({ name: 'checkout-complete', params: { orderNo: order.orderNo } })
+    if (order.paymentMethod === 'ONLINE') {
+      await goToPayment(order.orderNo)
+    } else {
+      router.replace({ name: 'checkout-complete', params: { orderNo: order.orderNo } })
+    }
   } catch (e) {
     if (['ORDER_TOKEN_INVALID', 'ORDER_TOKEN_REQUIRED'].includes(e.code)) {
       // 識別碼過期（結帳頁開太久）：換一個新的，請顧客再按一次。
@@ -140,6 +162,17 @@ async function submit() {
   }
 }
 
+/** 訂單已經成立了，接著前往綠界付款。失敗（例如網路斷了）就到訂單頁，可以從那裡再按「前往付款」 */
+async function goToPayment(orderNo) {
+  try {
+    const form = await startPayment(orderNo)
+    redirecting.value = true
+    redirectToPayment(form)
+  } catch {
+    router.replace({ name: 'order-detail', params: { orderNo } })
+  }
+}
+
 async function refreshCheckoutToken() {
   try {
     checkoutToken.value = (await getCheckoutToken()).token
@@ -152,7 +185,9 @@ async function refreshCheckoutToken() {
 <template>
   <h1>結帳</h1>
 
-  <el-skeleton v-if="loading" animated :rows="6" />
+  <!-- 購物車已經清掉了，畫面不要閃一下「沒有可以結帳的商品」 -->
+  <el-result v-if="redirecting" icon="info" title="正在前往綠界付款頁…" sub-title="請不要關閉視窗" />
+  <el-skeleton v-else-if="loading" animated :rows="6" />
   <LoadError v-else-if="loadError" :message="loadError" @retry="load" />
 
   <template v-else>
@@ -231,7 +266,15 @@ async function refreshCheckoutToken() {
 
       <section class="block card">
         <h2>付款方式</h2>
-        <p class="payment">{{ PAYMENT_METHOD_LABELS.COD }}：收到商品時付款</p>
+        <el-radio-group v-if="paymentOptions.onlinePaymentEnabled" v-model="form.paymentMethod" class="methods">
+          <el-radio value="COD" border size="large">{{ PAYMENT_METHOD_LABELS.COD }}：收到商品時付款</el-radio>
+          <el-radio value="ONLINE" border size="large">{{ PAYMENT_METHOD_LABELS.ONLINE }}</el-radio>
+        </el-radio-group>
+        <p v-else class="payment">{{ PAYMENT_METHOD_LABELS.COD }}：收到商品時付款</p>
+        <p v-if="isOnline" class="hint">
+          下單後會前往綠界科技的付款頁輸入信用卡（卡號不會經過本網站）。
+          請在 {{ paymentOptions.paymentTimeoutMinutes }} 分鐘內完成付款，逾時訂單會自動取消。
+        </p>
       </section>
 
       <section class="block card summary">
@@ -241,8 +284,8 @@ async function refreshCheckoutToken() {
         <p class="hint">實際金額以訂單成立時為準</p>
 
         <el-alert v-if="submitError" :title="submitError" type="error" :closable="false" show-icon class="submit-error" />
-        <el-button type="primary" size="large" native-type="submit" :loading="submitting" :disabled="submitting" class="submit">
-          {{ submitting ? '送出中…' : '確認下單' }}
+        <el-button type="primary" size="large" native-type="submit" :loading="submitting || redirecting" :disabled="submitting || redirecting" class="submit">
+          {{ redirecting ? '前往付款頁…' : submitting ? '送出中…' : isOnline ? '確認下單並前往付款' : '確認下單' }}
         </el-button>
       </section>
     </el-form>

@@ -56,9 +56,29 @@ class OrderEmailComposerTest {
         assertThat(email.body()).contains("正在為您備貨").doesNotContain("物流單號");
     }
 
+    @Test
+    void onlinePayment_textsMentionPaymentInsteadOfCashOnDelivery() {
+        String created = OrderEmailComposer.compose(OrderEventType.CREATED,
+                detail(ShippingMethodCode.HOME_DELIVERY, null, PaymentMethod.ONLINE), "https://shop.example").body();
+        assertThat(created).contains("請盡快完成線上付款").contains("（線上付款）").doesNotContain("貨到付款");
+
+        String confirmed = OrderEmailComposer.compose(OrderEventType.CONFIRMED,
+                detail(ShippingMethodCode.HOME_DELIVERY, null, PaymentMethod.ONLINE), "https://shop.example").body();
+        assertThat(confirmed).contains("已經收到您的付款");
+
+        String shipped = OrderEmailComposer.compose(OrderEventType.SHIPPED,
+                detail(ShippingMethodCode.CVS_PICKUP, "T1", PaymentMethod.ONLINE), "https://shop.example").body();
+        assertThat(shipped).contains("7 天內取件").doesNotContain("並付款");
+    }
+
     private static AdminOrderDetailResponse detail(ShippingMethodCode shippingMethod, String trackingNo) {
+        return detail(shippingMethod, trackingNo, PaymentMethod.COD);
+    }
+
+    private static AdminOrderDetailResponse detail(ShippingMethodCode shippingMethod, String trackingNo,
+                                                   PaymentMethod paymentMethod) {
         OrderDetailResponse order = new OrderDetailResponse("M2611130000000001", OrderStatus.PENDING_CONFIRM,
-                PaymentMethod.COD, PaymentStatus.UNPAID, shippingMethod, "王媽媽", "0912345678", "台北市中正區",
+                paymentMethod, PaymentStatus.UNPAID, shippingMethod, "王媽媽", "0912345678", "台北市中正區",
                 null, null, null, null, trackingNo,
                 new BigDecimal("1780.00"), new BigDecimal("100.00"), new BigDecimal("1880.00"),
                 List.of(new OrderDetailResponse.ItemResponse(1L, "帆布托特包", new BigDecimal("890.00"), 2,

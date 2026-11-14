@@ -44,6 +44,9 @@ public class SecurityConfig {
                         // 前台瀏覽商品不用登入（只開放 GET）
                         .requestMatchers(HttpMethod.GET,
                                 "/api/categories/**", "/api/products/**", "/api/shipping-methods/**").permitAll()
+                        // 線上付款（P01）：結帳頁的付款設定；綠界伺服器的付款通知（沒有 JWT，靠檢查碼驗證）
+                        .requestMatchers(HttpMethod.GET, "/api/payments/options").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/payments/ecpay/notify").permitAll()
                         // 商品圖片（B07）
                         .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
                         // API 文件（B13）。是否啟用由 API_DOCS_ENABLED 控制，正式環境關閉時這些路徑會是 404

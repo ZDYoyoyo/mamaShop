@@ -108,6 +108,13 @@ services:
       MAIL_FROM: ${MAIL_FROM:-}
       # 宅配送達後多久自動完成（M02），預設 7d
       ORDER_AUTO_COMPLETE_AFTER: ${ORDER_AUTO_COMPLETE_AFTER:-7d}
+      # 線上付款（P01）。ECPAY_ENABLED 沒設定 = 只有貨到付款
+      ECPAY_ENABLED: ${ECPAY_ENABLED:-false}
+      ECPAY_MERCHANT_ID: ${ECPAY_MERCHANT_ID:-}
+      ECPAY_HASH_KEY: ${ECPAY_HASH_KEY:-}
+      ECPAY_HASH_IV: ${ECPAY_HASH_IV:-}
+      ECPAY_CASHIER_URL: ${ECPAY_CASHIER_URL:-https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5}
+      ORDER_PAYMENT_TIMEOUT: ${ORDER_PAYMENT_TIMEOUT:-30m}
       DB_HOST: db
       DB_PORT: 5432
       DB_NAME: ${DB_NAME}
