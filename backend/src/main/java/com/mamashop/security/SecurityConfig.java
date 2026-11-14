@@ -48,6 +48,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
                         // API 文件（B13）。是否啟用由 API_DOCS_ENABLED 控制，正式環境關閉時這些路徑會是 404
                         .requestMatchers(HttpMethod.GET, "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // 健康檢查（D07）：給 Docker 與外部監控服務用，不需要登入。
+                        // 只開放 health 這一個；其他 actuator 端點沒有暴露（application.yml），就算暴露了也要登入
+                        .requestMatchers(HttpMethod.GET, "/api/actuator/health").permitAll()
                         // 例外發生時 Spring Boot 會轉到 /error；不開放的話真正的錯誤會被蓋成 401
                         .requestMatchers("/error").permitAll()
                         // 後台

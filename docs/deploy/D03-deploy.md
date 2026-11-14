@@ -144,7 +144,7 @@ docker compose -f deploy/docker-compose.prod.yml up -d
 docker compose -f deploy/docker-compose.prod.yml ps
 ```
 
-三個都是 `Up`，db 是 `(healthy)`，**只有 web 有 `0.0.0.0:80->80/tcp`**。
+三個都是 `Up (healthy)`（剛啟動時會是 `health: starting`，等一分鐘；健康檢查見 D07），**只有 web 有 `0.0.0.0:80->80/tcp`**。
 
 看後端啟動 log：
 
@@ -170,6 +170,7 @@ sudo bash ~/check-server.sh
 
 - 第一個：`HTTP/1.1 200 OK`，有 `Content-Security-Policy` 等 header
 - 第二個：`{"success":true,"data":[]}`（正式環境沒有測試資料，所以是空的）
+- 也可以看後端健康檢查：`curl http://localhost/api/actuator/health` → `{"status":"UP"}`
 - 第三個（D01 的檢查腳本）：「對外監聽的只有：22 80」。如果出現 5432 或 8080，代表設定被改過，資料庫或後端對外開放了
 
 用手機打開 `http://主機IP`：
