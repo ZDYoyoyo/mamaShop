@@ -17,7 +17,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 /** 超商電子地圖（P02）：組地圖參數、檢查地圖回傳的門市資料 */
 class CvsMapServiceTest {
 
-    private static final String MAP_URL = "https://logistics-stage.ecpay.com.tw/Express/map";
+    private static final String API_URL = "https://logistics-stage.ecpay.com.tw";
+    private static final String MAP_URL = API_URL + "/Express/map";
 
     private final CvsMapService c2c = service(true, true);
 
@@ -40,12 +41,16 @@ class CvsMapServiceTest {
     }
 
     @Test
-    void mapForm_b2c_hasNoSuffix_andNoOkMart() {
-        CvsMapService b2c = service(true, false);
+    void mapForm_b2c_hasNoSuffix() {
+        assertThat(service(true, false).mapForm(CvsBrand.HILIFE, true, false).fields())
+                .containsEntry("LogisticsSubType", "HILIFE");
+    }
 
-        assertThat(b2c.mapForm(CvsBrand.HILIFE, true, false).fields()).containsEntry("LogisticsSubType", "HILIFE");
-        assertThatThrownBy(() -> b2c.mapForm(CvsBrand.OK, true, false))
-                .extracting("errorCode").isEqualTo(ErrorCode.CVS_MAP_UNAVAILABLE);
+    @Test
+    void okMart_isNoLongerAvailable() {
+        // OK 超商店到店已於 2026/7/1 停止服務
+        assertThatThrownBy(() -> c2c.mapForm(CvsBrand.OK, true, false))
+                .extracting("errorCode").isEqualTo(ErrorCode.CVS_BRAND_UNAVAILABLE);
     }
 
     @Test
@@ -109,6 +114,7 @@ class CvsMapServiceTest {
     }
 
     private static CvsMapService service(boolean enabled, boolean c2c) {
-        return new CvsMapService(new EcpayLogisticsProperties(enabled, "2000933", c2c, MAP_URL, "https://shop.example.com/"));
+        return new CvsMapService(new EcpayLogisticsProperties(enabled, "2000933", null, null, c2c, API_URL + "/",
+                "https://shop.example.com/", null, null));
     }
 }

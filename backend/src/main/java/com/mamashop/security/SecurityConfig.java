@@ -51,6 +51,8 @@ public class SecurityConfig {
                         // 超商電子地圖（P02）：物流設定；地圖頁把選好的門市 POST 回來（顧客的瀏覽器送的，沒有 JWT）
                         .requestMatchers(HttpMethod.GET, "/api/logistics/options").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/logistics/ecpay/cvs-map-reply").permitAll()
+                        // 物流狀態通知（P03）：綠界伺服器呼叫，沒有 JWT（靠 MD5 簽章驗證）
+                        .requestMatchers(HttpMethod.POST, "/api/logistics/ecpay/notify").permitAll()
                         // 商品圖片（B07）
                         .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
                         // API 文件（B13）。是否啟用由 API_DOCS_ENABLED 控制，正式環境關閉時這些路徑會是 404
@@ -81,9 +83,9 @@ public class SecurityConfig {
         return PasswordEncoderFactories.createDelegatingPasswordEncoder();
     }
 
-    /** 綠界從外部呼叫的網址（P01 付款通知、P02 電子地圖回傳） */
+    /** 綠界從外部呼叫的網址（P01 付款通知、P02 電子地圖回傳、P03 物流狀態通知） */
     private static final Set<String> CALLBACK_PATHS = Set.of(
-            "/api/payments/ecpay/notify", "/api/logistics/ecpay/cvs-map-reply");
+            "/api/payments/ecpay/notify", "/api/logistics/ecpay/cvs-map-reply", "/api/logistics/ecpay/notify");
 
     /**
      * CORS：本機開發時前端（localhost:5173）和後端（localhost:8080）不同來源，

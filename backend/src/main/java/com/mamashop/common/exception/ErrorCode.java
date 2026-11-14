@@ -58,7 +58,13 @@ public enum ErrorCode {
     PAYMENT_TOO_MANY_ATTEMPTS(HttpStatus.CONFLICT, "付款嘗試次數過多，請聯絡賣家"),
 
     // 物流（P02）
-    CVS_MAP_UNAVAILABLE(HttpStatus.CONFLICT, "目前無法使用超商電子地圖，請手動填寫門市");
+    CVS_MAP_UNAVAILABLE(HttpStatus.CONFLICT, "目前無法使用超商電子地圖，請手動填寫門市"),
+    CVS_BRAND_UNAVAILABLE(HttpStatus.CONFLICT, "OK 超商店到店已停止服務，請選擇其他超商"),
+    SHIPMENT_UNAVAILABLE(HttpStatus.CONFLICT, "還沒設定綠界物流（金鑰或寄件人），請手動填寫物流單號出貨"),
+    SHIPMENT_NOT_ALLOWED(HttpStatus.CONFLICT, "只有「備貨中」的超商取貨訂單可以建立物流單"),
+    SHIPMENT_AMOUNT_INVALID(HttpStatus.CONFLICT, "超商取貨的金額需為 1～20,000 元的整數，請改用手動出貨"),
+    SHIPMENT_CREATE_FAILED(HttpStatus.BAD_GATEWAY, "綠界建立物流單失敗"),
+    SHIPMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "這筆訂單還沒有物流單");
 
     private final HttpStatus status;
     private final String defaultMessage;

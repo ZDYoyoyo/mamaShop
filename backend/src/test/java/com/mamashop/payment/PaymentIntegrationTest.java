@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.mamashop.category.entity.Category;
 import com.mamashop.category.repository.CategoryRepository;
+import com.mamashop.common.ecpay.EcpayCheckMacValue;
+import com.mamashop.common.ecpay.EcpayCheckMacValueTest;
 import com.mamashop.common.exception.BusinessException;
 import com.mamashop.common.exception.ErrorCode;
 import com.mamashop.common.exception.NotFoundException;
@@ -20,7 +22,6 @@ import com.mamashop.order.entity.PaymentStatus;
 import com.mamashop.order.service.AdminOrderService;
 import com.mamashop.order.service.OrderService;
 import com.mamashop.payment.dto.PaymentFormResponse;
-import com.mamashop.payment.service.EcpayCheckMacValue;
 import com.mamashop.payment.service.PaymentService;
 import com.mamashop.product.entity.Product;
 import com.mamashop.product.entity.ProductStatus;

@@ -51,7 +51,7 @@ public class CvsMapService {
     }
 
     public LogisticsOptionsResponse options() {
-        return new LogisticsOptionsResponse(properties.enabled());
+        return new LogisticsOptionsResponse(properties.enabled(), properties.shipmentEnabled());
     }
 
     /**
@@ -100,17 +100,14 @@ public class CvsMapService {
     }
 
     /** 我們的超商品牌 → 綠界的物流子類型（店到店多一個 C2C 後綴） */
-    private String subType(CvsBrand brand) {
+    public String subType(CvsBrand brand) {
         String base = switch (brand) {
             case SEVEN -> "UNIMART";
             case FAMILY -> "FAMI";
             case HILIFE -> "HILIFE";
-            case OK -> "OKMART";
+            // OK 超商店到店已於 2026/7/1 停止服務（綠界物流貨態代碼表的異動歷程），大宗寄倉本來就沒有
+            case OK -> throw new BusinessException(ErrorCode.CVS_BRAND_UNAVAILABLE);
         };
-        if (!properties.c2c() && brand == CvsBrand.OK) {
-            // 大宗寄倉（B2C）沒有 OK 超商
-            throw new BusinessException(ErrorCode.CVS_MAP_UNAVAILABLE, "OK 超商目前無法使用電子地圖，請選擇其他超商");
-        }
         return properties.c2c() ? base + "C2C" : base;
     }
 
@@ -122,8 +119,7 @@ public class CvsMapService {
             case "UNIMART" -> CvsBrand.SEVEN;
             case "FAMI" -> CvsBrand.FAMILY;
             case "HILIFE" -> CvsBrand.HILIFE;
-            case "OKMART" -> CvsBrand.OK;
-            default -> null;
+            default -> null; // OKMART 已停止服務
         };
     }
 

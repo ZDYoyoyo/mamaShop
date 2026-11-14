@@ -1,14 +1,18 @@
 /** 後端 enum 值 → 畫面上顯示的中文 */
 
-export const CVS_BRANDS = [
-  { value: 'SEVEN', label: '7-ELEVEN' },
-  { value: 'FAMILY', label: '全家' },
-  { value: 'HILIFE', label: '萊爾富' },
-  { value: 'OK', label: 'OK 超商' },
-]
+/** 所有超商品牌的名稱（含已停止服務的，舊訂單還是要顯示） */
+const CVS_BRAND_LABELS = {
+  SEVEN: '7-ELEVEN',
+  FAMILY: '全家',
+  HILIFE: '萊爾富',
+  OK: 'OK 超商',
+}
+
+/** 結帳可以選的超商。OK 超商店到店已於 2026/7/1 停止服務（P03），不再提供 */
+export const CVS_BRANDS = ['SEVEN', 'FAMILY', 'HILIFE'].map((value) => ({ value, label: CVS_BRAND_LABELS[value] }))
 
 export function cvsBrandLabel(value) {
-  return CVS_BRANDS.find((b) => b.value === value)?.label ?? value
+  return CVS_BRAND_LABELS[value] ?? value
 }
 
 export const PAYMENT_METHOD_LABELS = {

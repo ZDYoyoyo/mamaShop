@@ -375,6 +375,27 @@ describe('CheckoutView 超商電子地圖（P02）', () => {
     expect(wrapper.find('.map-button').text()).toBe('選擇門市')
   })
 
+  it('超商取貨的收件人姓名要符合綠界格式（取件核對證件，P03）', async () => {
+    const { wrapper } = await mountCheckout('/checkout?cvsBrand=SEVEN&cvsStoreCode=131386&cvsStoreName=A')
+    await input(wrapper, '姓名').setValue('林')
+    await input(wrapper, '姓名').trigger('blur')
+
+    await wrapper.find('form').trigger('submit')
+
+    await vi.waitFor(() => expect(wrapper.text()).toContain('超商取貨的收件人需為 2～5 個中文字或 4～10 個英文字母'))
+    expect(createOrder).not.toHaveBeenCalled()
+  })
+
+  it('OK 超商已停止服務，不在選項裡', async () => {
+    const { wrapper } = await mountCheckout()
+    await chooseCvs(wrapper)
+    await wrapper.find('.el-select').trigger('click')
+    await settle()
+
+    const options = [...document.querySelectorAll('.el-select-dropdown__item')].map((o) => o.textContent)
+    expect(options).toEqual(['7-ELEVEN', '全家', '萊爾富'])
+  })
+
   it('地圖回傳的門市資料有誤：顯示訊息請重選', async () => {
     const { wrapper, router } = await mountCheckout('/checkout?cvsMapError=1')
 

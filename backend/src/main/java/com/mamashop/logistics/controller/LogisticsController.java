@@ -5,6 +5,7 @@ import com.mamashop.common.response.ApiResponse;
 import com.mamashop.logistics.dto.CvsMapFormResponse;
 import com.mamashop.logistics.dto.LogisticsOptionsResponse;
 import com.mamashop.logistics.service.CvsMapService;
+import com.mamashop.logistics.service.ShipmentService;
 import com.mamashop.order.entity.CvsBrand;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -24,9 +25,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class LogisticsController {
 
     private final CvsMapService cvsMapService;
+    private final ShipmentService shipmentService;
 
-    public LogisticsController(CvsMapService cvsMapService) {
+    public LogisticsController(CvsMapService cvsMapService, ShipmentService shipmentService) {
         this.cvsMapService = cvsMapService;
+        this.shipmentService = shipmentService;
     }
 
     /** 結帳頁用：超商門市要用電子地圖選，還是手動填（不用登入） */
@@ -54,5 +57,13 @@ public class LogisticsController {
     @PostMapping(path = "/api/logistics/ecpay/cvs-map-reply", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
     public ResponseEntity<Void> cvsMapReply(@RequestParam Map<String, String> params) {
         return ResponseEntity.status(HttpStatus.SEE_OTHER).location(cvsMapService.handleMapReply(params)).build();
+    }
+
+    /** 綠界的物流狀態通知（P03，伺服器對伺服器，不帶 JWT，用 MD5 簽章驗證）。回應是純文字 1|OK */
+    @Operation(summary = "物流狀態通知（給綠界呼叫）")
+    @PostMapping(path = "/api/logistics/ecpay/notify",
+            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE, produces = MediaType.TEXT_PLAIN_VALUE)
+    public String statusNotify(@RequestParam Map<String, String> params) {
+        return shipmentService.handleStatusNotification(params);
     }
 }
