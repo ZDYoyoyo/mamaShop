@@ -876,3 +876,53 @@ OrderNotificationListener（@RabbitListener）→ 查最新的訂單 → OrderEm
 - ℹ️ 測試預設關閉通知（`app.notification.enabled=false`、消費者不啟動），避免每個測試的訂單都送進佇列、被別的測試拿到
 - ℹ️ CI 的後端 job 加上 RabbitMQ service。後端 325 個測試全部通過
 - ℹ️ 實測（本機 compose＋Mailpit）：下單、確認、出貨，Mailpit 收到 3 封，中文與版面正確；下單回應 278 ms（不用等寄信）
+
+## M02 逾時自動處理（TTL＋死信佇列）
+
+### 現在做的：宅配「已送達」7 天後自動完成
+
+```
+後台按「已送達」（交易中）
+  └─ publishEvent(OrderDeliveredEvent)
+        │ commit 之後（@TransactionalEventListener）、另一個執行緒（@Async）
+        ▼
+OrderAutoCompleteScheduler：只排宅配訂單
+  └─ exchange mamashop.order-timeout（direct）、routing key auto-complete.wait、訊息 expiration = 7 天
+        ▼
+queue mamashop.order-auto-complete.wait     ← 沒有消費者，訊息放著等過期
+  （x-dead-letter-exchange = mamashop.order-timeout、x-dead-letter-routing-key = auto-complete）
+        │ 7 天到期 → RabbitMQ 把訊息「死信」轉出去
+        ▼
+queue mamashop.order-auto-complete
+        ▼
+OrderAutoCompleteListener → AdminOrderService.autoComplete：還是「已送達」才改成「已完成」＋已付款，狀態紀錄操作者 NULL（顯示「系統」）
+```
+
+### 設計
+
+- ℹ️ **為什麼用 TTL＋死信，不用排程（@Scheduled 每小時掃資料庫）**：PLAN 指定的練習。兩種都可以；排程簡單、不怕訊息遺失，但要一直掃表；延遲訊息是「時間到才處理那一筆」。正式的大系統常兩個一起用（見下面的缺口）
+- ℹ️ **每則訊息自己的 TTL（expiration），不是佇列的 x-message-ttl**：佇列參數宣告後不能改，之後把 7 天改成 10 天，後端啟動宣告佇列會失敗（PRECONDITION_FAILED），得先刪掉佇列（連同還在等的訊息）。每則訊息帶自己的時間，改設定只影響之後的訂單
+- ⚠️ **RabbitMQ 只檢查佇列最前面那則有沒有過期**：同一個佇列的延遲都一樣（先送達先到期）就沒問題。把設定**改短**時，前面舊的 7 天訊息會擋住後面的，要等它們到期才會一起出來（晚一點完成，不會出錯）。所以一種延遲用一個等待佇列，之後「未付款自動取消」（30 分鐘）另外建一組
+- ℹ️ **只自動完成宅配**：超商取貨的「已送達」是「已到店」，顧客還沒取貨付款；7 天沒取會退回。自動完成會把沒收到錢的訂單標成已付款，所以超商維持家人手動完成（看物流後台確認取貨）。消費者這邊再檢查一次狀態，排程端也只送宅配
+- ℹ️ **冪等、不比對版本號**：7 天裡家人可能已經手動完成或改成已退回 → 不是「已送達」就什麼都不做。同一則訊息重複收到也一樣。和家人同時按「完成」的極端情況由 `@Version` 擋下（後寫入的 rollback），不會有兩筆「→ 已完成」
+- ℹ️ **送達事件 `OrderDeliveredEvent` 和通知的 `OrderEvent` 分開**：送達目前不寄信（M01 只寄下單、確認、出貨），混在一起通知模組要多寫「不處理」的分支
+- ℹ️ **新的 `timeout` 模組**：訂單模組只發事件、提供 `autoComplete`，不依賴 RabbitMQ（和 M01 的 notification 一樣的依賴方向）
+- ℹ️ 設定：`app.order-timeout.auto-complete-after`（環境變數 `ORDER_AUTO_COMPLETE_AFTER`，預設 `7d`）；兩個佇列 durable、訊息 persistent，RabbitMQ 重開後還在等的任務不會消失（正式環境有 rabbitmq-data volume）
+
+### 刻意沒做／之後要注意
+
+- 🔲 **「線上付款逾時未付款自動取消並歸還庫存」**：要等接金流（P 系列）才有「待付款」的訂單。做法相同：下單時送一則 30 分鐘的訊息到另一個等待佇列，消費者檢查還是「待付款」就取消＋歸還庫存（`OrderStockService.restore`）。注意要和「付款成功的通知」競爭：用狀態檢查＋`@Version` 保證只有一邊成功
+- ⚠️ **排定的時候 RabbitMQ 連不上 → 這筆訂單不會自動完成**（只記 log），家人照樣可以手動完成，不會出錯。要補可以加一個每天跑一次的排程：找「已送達超過 N 天」的宅配訂單補做（autoComplete 本來就冪等）。目前規模先記下來
+- ⚠️ **處理失敗（例如那一刻資料庫連不上）的訊息會被丟掉**（`default-requeue-rejected=false`），同上，M03 處理重試與失敗佇列
+- ⚠️ 測試時 `auto-complete-after` 縮成 2 秒；**不要在正式環境設很短的值**，家人來不及處理退貨就被自動完成
+- 🔲 沒有在前台顯示「X 天後自動完成」；顧客看到的只有狀態變成「已完成」
+
+### 測試
+
+- ℹ️ `OrderAutoCompleteIntegrationTest`（真的 RabbitMQ，延遲縮成 2 秒，Awaitility 等待）：
+  - 宅配送達 → 訊息先在等待佇列 → 約 2 秒後自動完成、已付款、狀態紀錄是「系統」
+  - 時間到之前家人已手動完成 → 消費者略過，只有一筆「→ 已完成」
+  - 超商取貨送達 → 不排定（等待佇列 0 筆）、狀態不變
+- ℹ️ `AdminOrderServiceTest`：送達發出事件；`autoComplete` 操作者 NULL、已完成／已退回／不存在的訂單不動
+- ℹ️ 測試預設關閉（`app.order-timeout.enabled=false`）。後端 331 個測試全部通過
+- ℹ️ 實測：RabbitMQ 裡等待佇列的參數是 `x-dead-letter-exchange=mamashop.order-timeout`、`x-dead-letter-routing-key=auto-complete`（`docker compose exec rabbitmq rabbitmqctl list_queues name arguments messages`）；log 顯示排定後 2.04 秒自動完成

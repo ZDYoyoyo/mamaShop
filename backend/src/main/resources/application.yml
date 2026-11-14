@@ -95,6 +95,11 @@ app:
     # 信裡「查看訂單」的連結
     site-url: ${SITE_URL:http://localhost:5173}
     mail-from: ${MAIL_FROM:mamaShop <no-reply@localhost>}
+  order-timeout:
+    # 逾時自動處理（M02，RabbitMQ 的 TTL＋死信佇列）。測試預設關閉
+    enabled: ${ORDER_TIMEOUT_ENABLED:true}
+    # 宅配訂單「已送達」之後多久自動完成（超商取貨不自動完成）。格式：7d、12h、30m
+    auto-complete-after: ${ORDER_AUTO_COMPLETE_AFTER:7d}
   admin:
     # 預設管理員：啟動時若這個 email 還不存在就建立。沒設定則略過
     email: ${ADMIN_EMAIL:}

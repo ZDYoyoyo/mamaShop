@@ -14,10 +14,12 @@ import com.mamashop.order.entity.Order;
 import com.mamashop.order.entity.OrderStatus;
 import com.mamashop.order.entity.OrderStatusHistory;
 import com.mamashop.order.entity.PaymentStatus;
+import com.mamashop.order.event.OrderDeliveredEvent;
 import com.mamashop.order.event.OrderEvent;
 import com.mamashop.order.event.OrderEventType;
 import com.mamashop.order.repository.OrderRepository;
 import com.mamashop.order.repository.OrderStatusHistoryRepository;
+import com.mamashop.shipping.entity.ShippingMethodCode;
 import com.mamashop.user.entity.Role;
 import com.mamashop.user.entity.User;
 import com.mamashop.user.repository.UserRepository;
@@ -154,6 +156,52 @@ class AdminOrderServiceTest {
         assertThatThrownBy(() -> adminOrderService.deliver("M1", 0, ADMIN_ID, null))
                 .extracting("errorCode").isEqualTo(ErrorCode.INVALID_ORDER_STATUS);
         verify(orderRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void deliver_publishesDeliveredEvent_forAutoComplete() {
+        Order order = order(OrderStatus.SHIPPED, 2);
+        order.setShippingMethod(ShippingMethodCode.HOME_DELIVERY);
+        stubAction(order);
+
+        adminOrderService.deliver("M1", 2, ADMIN_ID, null);
+
+        // 逾時自動處理（M02）聽這個事件排定 N 天後自動完成
+        verify(eventPublisher).publishEvent(new OrderDeliveredEvent("M1", ShippingMethodCode.HOME_DELIVERY));
+    }
+
+    @Test
+    void autoComplete_delivered_completesAsSystem() {
+        Order order = order(OrderStatus.DELIVERED, 3);
+        when(orderRepository.findByOrderNo("M1")).thenReturn(Optional.of(order));
+
+        boolean changed = adminOrderService.autoComplete("M1", "宅配送達超過 7 天，系統自動完成");
+
+        assertThat(changed).isTrue();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
+        assertThat(order.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+        ArgumentCaptor<OrderStatusHistory> history = ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(historyRepository).save(history.capture());
+        // 操作者 NULL = 系統
+        assertThat(history.getValue().getOperator()).isNull();
+        assertThat(history.getValue().getNote()).isEqualTo("宅配送達超過 7 天，系統自動完成");
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void autoComplete_alreadyHandled_doesNothing() {
+        // 這段期間家人已經手動完成、或改成已退回：延遲任務什麼都不做（冪等）
+        for (OrderStatus status : List.of(OrderStatus.COMPLETED, OrderStatus.RETURNED)) {
+            Order order = order(status, 4);
+            when(orderRepository.findByOrderNo("M1")).thenReturn(Optional.of(order));
+
+            assertThat(adminOrderService.autoComplete("M1", "note")).isFalse();
+            assertThat(order.getStatus()).isEqualTo(status);
+        }
+        when(orderRepository.findByOrderNo("NOT-EXIST")).thenReturn(Optional.empty());
+        assertThat(adminOrderService.autoComplete("NOT-EXIST", "note")).isFalse();
+        verify(orderRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(historyRepository);
     }
 
     // ===== helpers =====
