@@ -3,9 +3,17 @@ import { mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
 
-vi.mock('@/api/admin/orders', () => ({ getAdminOrder: vi.fn(), runOrderAction: vi.fn() }))
+vi.mock('@/api/admin/orders', () => ({
+  getAdminOrder: vi.fn(),
+  runOrderAction: vi.fn(),
+  getShipment: vi.fn(),
+  createShipment: vi.fn(),
+  openShipmentLabel: vi.fn(),
+}))
+vi.mock('@/api/logistics', () => ({ getLogisticsOptions: vi.fn() }))
 
-import { getAdminOrder, runOrderAction } from '@/api/admin/orders'
+import { createShipment, getAdminOrder, getShipment, openShipmentLabel, runOrderAction } from '@/api/admin/orders'
+import { getLogisticsOptions } from '@/api/logistics'
 import { ApiError } from '@/api/http'
 import { routes } from '@/router'
 import { settle } from '@/test-utils'
@@ -61,6 +69,8 @@ describe('AdminOrderDetailView', () => {
     setActivePinia(createPinia())
     vi.mocked(getAdminOrder).mockReset()
     vi.mocked(runOrderAction).mockReset()
+    vi.mocked(getLogisticsOptions).mockResolvedValue({ cvsMapEnabled: false, shipmentEnabled: false })
+    vi.mocked(getShipment).mockResolvedValue(null)
   })
 
   it('顯示商品、金額、收件人與下單會員（電話可以直接撥打）、狀態紀錄', async () => {
@@ -131,5 +141,85 @@ describe('AdminOrderDetailView', () => {
     const wrapper = await mountDetail()
 
     expect(wrapper.text()).toContain('找不到這筆訂單')
+  })
+})
+
+describe('AdminOrderDetailView 綠界物流單（P03）', () => {
+  const cvsOrder = (overrides = {}, version = 1) =>
+    detail({ status: 'PROCESSING', shippingMethod: 'CVS_PICKUP', cvsBrand: 'SEVEN', cvsStoreCode: '131386', cvsStoreName: '建盛門市', ...overrides }, version)
+  const SHIPMENT = {
+    logisticsId: '3799461', logisticsSubType: 'UNIMARTC2C', paymentNo: 'D8858181', validationNo: '5655',
+    statusCode: 300, statusMessage: '訂單處理中(綠界已收到訂單資料)', statusUpdatedAt: '2026-11-14T07:18:11Z', createdAt: '2026-11-14T07:18:11Z',
+  }
+
+  beforeEach(() => {
+    document.body.innerHTML = ''
+    setActivePinia(createPinia())
+    vi.mocked(getAdminOrder).mockReset()
+    vi.mocked(getShipment).mockReset()
+    vi.mocked(getShipment).mockResolvedValue(null)
+    vi.mocked(createShipment).mockReset()
+    vi.mocked(openShipmentLabel).mockReset()
+    vi.mocked(getLogisticsOptions).mockResolvedValue({ cvsMapEnabled: true, shipmentEnabled: true })
+  })
+
+  async function confirmPopconfirm(wrapper) {
+    await wrapper.find('button.create-shipment').trigger('click')
+    await settle()
+    ;[...document.querySelectorAll('.el-popconfirm button')].find((b) => b.textContent.includes('建立')).click()
+    await settle()
+  }
+
+  it('備貨中的超商訂單：建立物流單並出貨，之後顯示寄件代碼', async () => {
+    vi.mocked(getAdminOrder).mockResolvedValue(cvsOrder())
+    vi.mocked(createShipment).mockResolvedValue(cvsOrder({ status: 'SHIPPED', trackingNo: 'D88581815655' }, 2))
+    const wrapper = await mountDetail()
+    vi.mocked(getShipment).mockResolvedValue(SHIPMENT)
+
+    await confirmPopconfirm(wrapper)
+
+    expect(createShipment).toHaveBeenCalledWith('M1', { version: 1 })
+    await vi.waitFor(() => expect(wrapper.find('.shipment').text()).toContain('寄件代碼 D8858181'))
+    expect(wrapper.find('.shipment').text()).toContain('驗證碼 5655')
+    expect(wrapper.find('.shipment').text()).toContain('ibon')
+    expect(document.body.textContent).toContain('已建立物流單，寄件代碼 D88581815655')
+  })
+
+  it('綠界拒絕：顯示綠界的原因，訂單不變', async () => {
+    vi.mocked(getAdminOrder).mockResolvedValue(cvsOrder())
+    vi.mocked(createShipment).mockRejectedValue(
+      new ApiError({ status: 502, code: 'SHIPMENT_CREATE_FAILED', message: '綠界建立物流單失敗：收件人姓名請設定為 4~10 字元' }),
+    )
+    const wrapper = await mountDetail()
+
+    await confirmPopconfirm(wrapper)
+
+    await vi.waitFor(() => expect(document.body.textContent).toContain('收件人姓名請設定為 4~10 字元'))
+    expect(wrapper.find('button.create-shipment').exists()).toBe(true)
+  })
+
+  it('已有物流單：顯示最新物流狀態，可以列印寄件單', async () => {
+    vi.mocked(getAdminOrder).mockResolvedValue(cvsOrder({ status: 'DELIVERED' }, 3))
+    vi.mocked(getShipment).mockResolvedValue({ ...SHIPMENT, statusCode: 2073, statusMessage: '包裹配達取件門市' })
+    const wrapper = await mountDetail()
+
+    expect(wrapper.find('.shipment').text()).toContain('物流狀態：包裹配達取件門市')
+    await wrapper.find('.shipment button.print').trigger('click')
+    expect(openShipmentLabel).toHaveBeenCalledWith('M1')
+  })
+
+  it('沒設定綠界物流、宅配訂單：不顯示物流單區塊', async () => {
+    vi.mocked(getLogisticsOptions).mockResolvedValue({ cvsMapEnabled: true, shipmentEnabled: false })
+    vi.mocked(getAdminOrder).mockResolvedValue(cvsOrder())
+    let wrapper = await mountDetail()
+    expect(wrapper.find('.shipment').exists()).toBe(false)
+
+    document.body.innerHTML = ''
+    vi.mocked(getShipment).mockClear()
+    vi.mocked(getLogisticsOptions).mockResolvedValue({ cvsMapEnabled: true, shipmentEnabled: true })
+    vi.mocked(getAdminOrder).mockResolvedValue(detail({ status: 'PROCESSING' }, 1))
+    wrapper = await mountDetail()
+    expect(wrapper.find('.shipment').exists()).toBe(false)
+    expect(getShipment).not.toHaveBeenCalled()
   })
 })

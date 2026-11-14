@@ -218,6 +218,62 @@ public class AdminOrderService {
         return true;
     }
 
+    /**
+     * 物流狀態通知（P03，綠界）→ 自動更新訂單。和其他系統操作一樣先鎖住訂單、依最新狀態處理，
+     * 重複通知、順序錯亂（例如「到店」的通知沒收到就先收到「已取件」）都不會出錯：
+     *
+     * <ul>
+     *   <li>到店：已出貨 → 已送達</li>
+     *   <li>已取件：→ 已完成＋已付款（取貨付款在取件時收錢）；還是「已出貨」就先補一筆「已送達」</li>
+     *   <li>未取件／退回寄件門市：已出貨、已送達 → 已退回。<b>不自動加回庫存</b>：包裹還在路上，
+     *       收到後確認商品沒壞再到商品管理調整（和管理員手動「退回」時選擇不加回庫存一樣）</li>
+     *   <li>其他情況（寄件、重複通知、訂單已經是後面的狀態）：只留一筆紀錄，狀態不變</li>
+     * </ul>
+     *
+     * @return 這次有改變訂單狀態
+     */
+    @Transactional
+    public boolean logisticsStatusChanged(String orderNo, LogisticsEvent event, String note) {
+        Order order = orderRepository.findForUpdateByOrderNo(orderNo)
+                .orElseThrow(() -> new NotFoundException("找不到訂單"));
+        OrderStatus status = order.getStatus();
+        switch (event) {
+            case ARRIVED -> {
+                if (status == OrderStatus.SHIPPED) {
+                    changeStatus(order, OrderStatus.DELIVERED, null, note);
+                    return true;
+                }
+            }
+            case PICKED_UP -> {
+                if (status == OrderStatus.SHIPPED) {
+                    changeStatus(order, OrderStatus.DELIVERED, null, "（到店通知沒收到，依取件通知補上）");
+                    status = OrderStatus.DELIVERED;
+                }
+                if (status == OrderStatus.DELIVERED) {
+                    if (order.getPaymentStatus() != PaymentStatus.PAID) {
+                        order.setPaymentStatus(PaymentStatus.PAID);
+                        order.setPaidAt(Instant.now());
+                    }
+                    changeStatus(order, OrderStatus.COMPLETED, null, note);
+                    return true;
+                }
+            }
+            case NOT_PICKED_UP, RETURNED_TO_SENDER -> {
+                if (status == OrderStatus.SHIPPED || status == OrderStatus.DELIVERED) {
+                    String refund = order.getPaymentStatus() == PaymentStatus.PAID ? "已線上付款，請到綠界後台退款；" : "";
+                    changeStatus(order, OrderStatus.RETURNED, null,
+                            note + "（" + refund + "包裹退回後請確認商品，再到商品管理調整庫存）");
+                    return true;
+                }
+            }
+            case DROPPED_OFF -> {
+                // 只記錄
+            }
+        }
+        recordWithoutStatusChange(order, note);
+        return false;
+    }
+
     /** 狀態沒變、但要留下紀錄（例如需要退款），操作者是系統 */
     private void recordWithoutStatusChange(Order order, String note) {
         historyRepository.save(new OrderStatusHistory(order, order.getStatus(), order.getStatus(), null, note));

@@ -1,4 +1,5 @@
 import http from '@/api/http'
+import { submitPostForm } from '@/utils/postForm'
 
 /** 後台訂單 API（/api/admin/orders，限管理員） */
 
@@ -22,3 +23,32 @@ export function getAdminOrder(orderNo) {
 export function runOrderAction(action, orderNo, body) {
   return http.post(`/admin/orders/${encodeURIComponent(orderNo)}/${action}`, body)
 }
+
+// ===== 綠界物流單（P03） =====
+
+/** 這張訂單的物流單（還沒建立時是 null） */
+export function getShipment(orderNo) {
+  return http.get(`/admin/orders/${encodeURIComponent(orderNo)}/shipment`)
+}
+
+/** 建立物流單並出貨：{ version, note? }，回傳更新後的訂單詳情（已出貨） */
+export function createShipment(orderNo, body) {
+  return http.post(`/admin/orders/${encodeURIComponent(orderNo)}/shipment`, body)
+}
+
+/**
+ * 列印寄件單：向後端拿到簽好的表單，在新分頁 POST 到綠界。
+ * 新分頁要在「按下按鈕的當下」就打開（還沒 await 之前）：等 API 回來才開的話，瀏覽器會當成彈出視窗擋掉
+ */
+export async function openShipmentLabel(orderNo) {
+  const tab = window.open('about:blank', LABEL_WINDOW)
+  try {
+    const form = await http.get(`/admin/orders/${encodeURIComponent(orderNo)}/shipment/label`)
+    submitPostForm(form, { target: LABEL_WINDOW })
+  } catch (e) {
+    tab?.close()
+    throw e
+  }
+}
+
+const LABEL_WINDOW = 'mamashop-shipment-label'

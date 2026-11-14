@@ -92,6 +92,7 @@ class AccessControlTest {
                 e("GET", "/api/logistics/options", Access.PUBLIC),
                 e("GET", "/api/logistics/cvs-map", Access.LOGGED_IN),
                 e("POST", "/api/logistics/ecpay/cvs-map-reply", Access.PUBLIC),
+                e("POST", "/api/logistics/ecpay/notify", Access.PUBLIC),
                 // ===== 後台 =====
                 e("GET", "/api/admin/categories", Access.ADMIN),
                 e("POST", "/api/admin/categories", Access.ADMIN),
@@ -114,6 +115,10 @@ class AccessControlTest {
                 e("POST", "/api/admin/orders/{orderNo}/deliver", Access.ADMIN),
                 e("POST", "/api/admin/orders/{orderNo}/complete", Access.ADMIN),
                 e("POST", "/api/admin/orders/{orderNo}/cancel", Access.ADMIN),
+                // 綠界物流單（P03）
+                e("GET", "/api/admin/orders/{orderNo}/shipment", Access.ADMIN),
+                e("POST", "/api/admin/orders/{orderNo}/shipment", Access.ADMIN),
+                e("GET", "/api/admin/orders/{orderNo}/shipment/label", Access.ADMIN),
                 e("POST", "/api/admin/orders/{orderNo}/return", Access.ADMIN),
                 e("GET", "/api/admin/admins", Access.ADMIN),
                 e("POST", "/api/admin/admins", Access.ADMIN),

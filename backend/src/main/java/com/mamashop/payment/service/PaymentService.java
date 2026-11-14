@@ -1,5 +1,6 @@
 package com.mamashop.payment.service;
 
+import com.mamashop.common.ecpay.EcpayCheckMacValue;
 import com.mamashop.common.exception.BusinessException;
 import com.mamashop.common.exception.ErrorCode;
 import com.mamashop.common.exception.NotFoundException;

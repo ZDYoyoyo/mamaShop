@@ -24,7 +24,7 @@ import { useCartStore } from '@/stores/cart'
 import { formatPrice } from '@/utils/format'
 import { saveCheckoutDraft, takeCheckoutDraft } from '@/utils/checkoutDraft'
 import { CVS_BRANDS, cvsBrandLabel, PAYMENT_METHOD_LABELS } from '@/utils/labels'
-import { PHONE_MESSAGE, PHONE_PATTERN, toFieldErrorMap } from '@/utils/validation'
+import { CVS_NAME_MESSAGE, isValidCvsName, PHONE_MESSAGE, PHONE_PATTERN, toFieldErrorMap } from '@/utils/validation'
 
 const router = useRouter()
 const route = useRoute()
@@ -74,6 +74,12 @@ const rules = computed(() => ({
   recipientName: [
     { required: true, message: '請輸入收件人姓名', trigger: 'blur' },
     { max: 50, message: '最多 50 個字', trigger: 'blur' },
+    // 超商取貨要核對證件，綠界限制姓名格式（P03）
+    {
+      validator: (_rule, value, callback) =>
+        !isCvsPickup.value || !value || isValidCvsName(value) ? callback() : callback(new Error(CVS_NAME_MESSAGE)),
+      trigger: 'blur',
+    },
   ],
   recipientPhone: [
     { required: true, message: '請輸入收件人手機', trigger: 'blur' },

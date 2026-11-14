@@ -5,12 +5,16 @@
  * 操作（確認、出貨…）都經過 OrderActionDialog，送出時帶上畫面上的版本號 detail.version。
  * 家人可能同時在不同手機上處理同一筆訂單：後端發現版本不同會回 409，
  * 這時重新讀取，讓畫面變成最新狀態，再由家人決定要不要繼續操作（B10 的樂觀鎖）。
+ *
+ * 綠界物流單（P03，超商取貨）：有設定綠界物流時，「備貨中」的訂單可以「建立物流單並出貨」，
+ * 之後顯示寄件代碼、最新物流狀態、列印寄件單。到店／取件／未取件由綠界通知自動更新訂單。
  */
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
-import { getAdminOrder } from '@/api/admin/orders'
+import { createShipment, getAdminOrder, getShipment, openShipmentLabel } from '@/api/admin/orders'
+import { getLogisticsOptions } from '@/api/logistics'
 import LoadError from '@/components/LoadError.vue'
 import OrderProgress from '@/components/OrderProgress.vue'
 import OrderStatusTag from '@/components/OrderStatusTag.vue'
@@ -62,6 +66,61 @@ async function load() {
 }
 
 watch(() => props.orderNo, load, { immediate: true })
+
+// ===== 綠界物流單（P03） =====
+
+/** 後端有設定綠界物流（金鑰、寄件人）才能建立物流單；查不到就當作沒有 */
+const shipmentEnabled = ref(false)
+getLogisticsOptions()
+  .then((options) => (shipmentEnabled.value = options.shipmentEnabled))
+  .catch(() => {})
+
+/** 後端的 ShipmentResponse（還沒建立是 null） */
+const shipment = ref(null)
+const isCvs = computed(() => order.value?.shippingMethod === 'CVS_PICKUP')
+const canCreateShipment = computed(() => shipmentEnabled.value && isCvs.value && order.value.status === 'PROCESSING')
+
+async function loadShipment() {
+  if (!isCvs.value) {
+    shipment.value = null
+    return
+  }
+  try {
+    shipment.value = await getShipment(props.orderNo)
+  } catch {
+    shipment.value = null
+  }
+}
+
+// 讀到訂單（或訂單更新）之後再讀物流單：狀態通知會改訂單，物流單的最新狀態也跟著變
+watch(() => detail.value?.version, loadShipment)
+
+const creatingShipment = ref(false)
+async function onCreateShipment() {
+  creatingShipment.value = true
+  try {
+    detail.value = await createShipment(props.orderNo, { version: detail.value.version })
+    ElMessage.success(`已建立物流單，寄件代碼 ${order.value.trackingNo}`)
+  } catch (e) {
+    if (e.status === 409 && e.code === 'CONFLICT') await onStale(e.message)
+    // 例如綠界拒絕（收件人姓名格式不符）：顯示綠界的原因
+    else ElMessage.error({ message: e.message, duration: 8000 })
+  } finally {
+    creatingShipment.value = false
+  }
+}
+
+const printing = ref(false)
+async function onPrintLabel() {
+  printing.value = true
+  try {
+    await openShipmentLabel(props.orderNo)
+  } catch (e) {
+    ElMessage.error(e.message)
+  } finally {
+    printing.value = false
+  }
+}
 
 function onDone(updated) {
   detail.value = updated
@@ -128,6 +187,40 @@ function operatorText(history) {
       >
         {{ ORDER_ACTIONS[key].label }}
       </el-button>
+    </section>
+
+    <!-- 綠界物流單（P03）：超商取貨 -->
+    <section v-if="canCreateShipment || shipment" class="card shipment">
+      <h2>綠界物流單</h2>
+      <template v-if="shipment">
+        <p class="codes">
+          寄件代碼 <strong>{{ shipment.paymentNo }}</strong>
+          <template v-if="shipment.validationNo">　驗證碼 <strong>{{ shipment.validationNo }}</strong></template>
+        </p>
+        <p class="muted">
+          {{ order.cvsBrand === 'SEVEN' ? '可以列印寄件單，或到 7-ELEVEN 的 ibon 輸入寄件代碼與驗證碼，再到櫃台寄件' : '列印寄件單後貼在包裹上，到門市櫃台寄件' }}
+        </p>
+        <p>物流狀態：{{ shipment.statusMessage }}<span class="muted">（{{ formatDateTime(shipment.statusUpdatedAt) }}）</span></p>
+        <p class="muted">綠界物流編號 {{ shipment.logisticsId }}　到店、取件、未取件會自動更新訂單</p>
+        <el-button :loading="printing" class="print" @click="onPrintLabel">列印寄件單</el-button>
+      </template>
+      <template v-else>
+        <p class="muted">
+          向綠界建立{{ cvsBrandLabel(order.cvsBrand) }}店到店物流單，取得寄件代碼後訂單改成「已出貨」並通知顧客。
+          之後到店、取件、未取件會自動更新訂單。
+        </p>
+        <el-popconfirm
+          title="確定要建立物流單並出貨嗎？"
+          confirm-button-text="建立"
+          cancel-button-text="再想想"
+          width="240"
+          @confirm="onCreateShipment"
+        >
+          <template #reference>
+            <el-button type="primary" size="large" :loading="creatingShipment" class="create-shipment">建立物流單並出貨</el-button>
+          </template>
+        </el-popconfirm>
+      </template>
     </section>
 
     <section class="card">
@@ -310,6 +403,18 @@ p {
     flex: 1 1 40%;
   }
 }
+.shipment .codes {
+  font-size: 1.1rem;
+}
+
+.shipment p {
+  margin: 4px 0;
+}
+
+.shipment .el-button {
+  margin-top: 8px;
+}
+
 .refund-alert {
   margin: 8px 0;
 }

@@ -1,5 +1,6 @@
 package com.mamashop.order.dto;
 
+import com.mamashop.order.entity.CvsBrand;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 import org.springframework.util.StringUtils;
@@ -12,6 +13,8 @@ import org.springframework.util.StringUtils;
  * 資料庫的 ck_orders_shipping_info 也有同樣的檢查，這裡是給使用者看得懂的第一道防線。
  */
 public class ShippingInfoValidator implements ConstraintValidator<ValidShippingInfo, CreateOrderRequest> {
+
+    static final String CVS_NAME_MESSAGE = "超商取貨的收件人需為 2～5 個中文字或 4～10 個英文字母，不能有數字或符號（取件時要核對證件）";
 
     @Override
     public boolean isValid(CreateOrderRequest request, ConstraintValidatorContext context) {
@@ -30,6 +33,14 @@ public class ShippingInfoValidator implements ConstraintValidator<ValidShippingI
             case CVS_PICKUP -> {
                 if (request.cvsBrand() == null) {
                     valid = addError(context, "cvsBrand", "超商取貨需選擇超商");
+                } else if (request.cvsBrand() == CvsBrand.OK) {
+                    // OK 超商店到店已於 2026/7/1 停止服務（P03 查綠界物流貨態代碼表時發現）。舊訂單的資料不受影響
+                    valid = addError(context, "cvsBrand", "OK 超商店到店已停止服務，請選擇其他超商");
+                }
+                // 取件時要核對證件，綠界也會拒絕不符合格式的姓名（P03 建立物流單時才失敗就太晚了）
+                if (request.recipientName() != null && !request.recipientName().isBlank()
+                        && !CvsNameRule.isValid(request.recipientName())) {
+                    valid = addError(context, "recipientName", CVS_NAME_MESSAGE);
                 }
                 if (!StringUtils.hasText(request.cvsStoreCode())) {
                     valid = addError(context, "cvsStoreCode", "超商取貨需填寫門市店號");

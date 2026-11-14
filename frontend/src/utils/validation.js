@@ -35,3 +35,15 @@ export const rules = {
 export function toFieldErrorMap(apiError) {
   return Object.fromEntries((apiError?.fieldErrors ?? []).map((e) => [e.field, e.message]))
 }
+
+/**
+ * 超商取貨的收件人姓名（P03，和後端 CvsNameRule 一致）：取件時要核對證件，綠界也有限制。
+ * 中文算 2、英文字母和空白算 1，總共 4～10；不能有數字和符號（中文 2～5 字或英文 4～10 字）
+ */
+export const CVS_NAME_MESSAGE = '超商取貨的收件人需為 2～5 個中文字或 4～10 個英文字母，不能有數字或符號（取件時要核對證件）'
+
+export function isValidCvsName(name) {
+  if (!/^[\p{Script=Han}A-Za-z ]+$/u.test(name ?? '')) return false
+  const width = [...name].reduce((sum, ch) => sum + (ch.codePointAt(0) <= 0x7f ? 1 : 2), 0)
+  return width >= 4 && width <= 10
+}
