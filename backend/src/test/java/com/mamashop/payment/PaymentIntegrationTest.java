@@ -229,6 +229,33 @@ class PaymentIntegrationTest {
                 .containsEntry("MerchantTradeNo", orderNo + "02");
     }
 
+    // ===== 後台操作 =====
+
+    @Test
+    void adminCannotConfirmUnpaidOnlineOrder_butCanAfterPayment_andPaidAtIsKept() {
+        String orderNo = onlineOrder();
+        String tradeNo = paymentService.startPayment(customer.getId(), orderNo).fields().get("MerchantTradeNo");
+
+        // 還沒付款：管理員不能手動確認（只有金流通知能把待付款改成備貨中）
+        assertThatThrownBy(() -> adminOrderService.confirm(orderNo, 0, customer.getId(), null))
+                .extracting("errorCode").isEqualTo(ErrorCode.INVALID_ORDER_STATUS);
+        assertThat(order(orderNo).order().status()).isEqualTo(OrderStatus.PENDING_PAYMENT);
+        // 顧客還是可以付款
+        notifyPaid(tradeNo, "850");
+
+        AdminOrderDetailResponse paid = order(orderNo);
+        assertThat(paid.order().status()).isEqualTo(OrderStatus.PROCESSING);
+        java.time.Instant paidAt = paid.order().paidAt();
+
+        // 之後照一般流程出貨、送達、完成：付款時間維持金流通知的那一刻，不會被「完成」蓋掉
+        long v = paid.version();
+        v = adminOrderService.ship(orderNo, v, "T1", customer.getId(), null).version();
+        v = adminOrderService.deliver(orderNo, v, customer.getId(), null).version();
+        AdminOrderDetailResponse completed = adminOrderService.complete(orderNo, v, customer.getId(), null);
+        assertThat(completed.order().status()).isEqualTo(OrderStatus.COMPLETED);
+        assertThat(completed.order().paidAt()).isEqualTo(paidAt);
+    }
+
     // ===== 逾時取消 vs 付款 =====
 
     @Test

@@ -23,6 +23,7 @@ import com.mamashop.shipping.entity.ShippingMethodCode;
 import com.mamashop.user.entity.Role;
 import com.mamashop.user.entity.User;
 import com.mamashop.user.repository.UserRepository;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -83,6 +84,36 @@ class AdminOrderServiceTest {
         assertThat(result.order().paymentStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(result.order().paidAt()).isNotNull();
         assertThat(result.order().completedAt()).isNotNull();
+    }
+
+    @Test
+    void complete_onlinePaidOrder_keepsOriginalPaidAt() {
+        // 線上付款的訂單在金流通知時就付款了：完成時不能把付款時間蓋成「完成的時間」（查帳要對得上綠界的紀錄）
+        Instant paidAt = Instant.parse("2026-11-14T02:05:00Z");
+        Order order = order(OrderStatus.DELIVERED, 3);
+        order.setPaymentStatus(PaymentStatus.PAID);
+        order.setPaidAt(paidAt);
+        stubAction(order);
+
+        AdminOrderDetailResponse result = adminOrderService.complete("M1", 3, ADMIN_ID, null);
+
+        assertThat(result.order().status()).isEqualTo(OrderStatus.COMPLETED);
+        assertThat(result.order().paidAt()).isEqualTo(paidAt);
+    }
+
+    @Test
+    void confirm_pendingPayment_isRejected() {
+        // 線上付款的訂單只有金流通知能確認：手動確認會變成「備貨中＋未付款」，等於沒收到錢就出貨
+        Order order = order(OrderStatus.PENDING_PAYMENT, 0);
+        when(orderRepository.findByOrderNo("M1")).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> adminOrderService.confirm("M1", 0, ADMIN_ID, null))
+                .hasMessageContaining("要等顧客付款")
+                .extracting("errorCode").isEqualTo(ErrorCode.INVALID_ORDER_STATUS);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING_PAYMENT);
+        verify(orderRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(historyRepository, eventPublisher);
     }
 
     @Test
@@ -186,6 +217,20 @@ class AdminOrderServiceTest {
         assertThat(history.getValue().getOperator()).isNull();
         assertThat(history.getValue().getNote()).isEqualTo("宅配送達超過 7 天，系統自動完成");
         verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void autoComplete_onlinePaidOrder_keepsOriginalPaidAt() {
+        Instant paidAt = Instant.parse("2026-11-14T02:05:00Z");
+        Order order = order(OrderStatus.DELIVERED, 3);
+        order.setPaymentStatus(PaymentStatus.PAID);
+        order.setPaidAt(paidAt);
+        when(orderRepository.findByOrderNo("M1")).thenReturn(Optional.of(order));
+
+        assertThat(adminOrderService.autoComplete("M1", "note")).isTrue();
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
+        assertThat(order.getPaidAt()).isEqualTo(paidAt);
     }
 
     @Test

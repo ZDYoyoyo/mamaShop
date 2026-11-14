@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { availableActions, ORDER_ACTIONS } from '@/utils/adminOrderActions'
 import { ORDER_STATUS } from '@/utils/labels'
 
-describe('availableActions（和後端 OrderStatus.canTransitionTo 一致）', () => {
+describe('availableActions（和後端 OrderStatus.canTransitionTo、AdminOrderService 一致）', () => {
   it('出貨前：確認／出貨、取消', () => {
     expect(availableActions('PENDING_CONFIRM')).toEqual(['confirm', 'cancel'])
-    expect(availableActions('PENDING_PAYMENT')).toEqual(['confirm', 'cancel'])
     expect(availableActions('PROCESSING')).toEqual(['ship', 'cancel'])
+  })
+
+  it('待付款（線上付款）：不能手動確認，只能取消；付款成功由金流通知自動確認', () => {
+    expect(availableActions('PENDING_PAYMENT')).toEqual(['cancel'])
   })
 
   it('出貨後：不能取消，只能送達／完成或退回', () => {
