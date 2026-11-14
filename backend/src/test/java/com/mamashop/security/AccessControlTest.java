@@ -88,6 +88,10 @@ class AccessControlTest {
                 e("POST", "/api/orders/{orderNo}/payment", Access.LOGGED_IN),
                 e("GET", "/api/payments/options", Access.PUBLIC),
                 e("POST", "/api/payments/ecpay/notify", Access.PUBLIC),
+                // 超商電子地圖（P02）：選好門市後是綠界的地圖頁讓顧客瀏覽器 POST 回來，沒有 JWT
+                e("GET", "/api/logistics/options", Access.PUBLIC),
+                e("GET", "/api/logistics/cvs-map", Access.LOGGED_IN),
+                e("POST", "/api/logistics/ecpay/cvs-map-reply", Access.PUBLIC),
                 // ===== 後台 =====
                 e("GET", "/api/admin/categories", Access.ADMIN),
                 e("POST", "/api/admin/categories", Access.ADMIN),
