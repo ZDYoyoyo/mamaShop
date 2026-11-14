@@ -38,6 +38,35 @@ spring:
       timeout: 500ms
       connect-timeout: 500ms
 
+  # ===== 訂單通知（M01）：RabbitMQ＋寄信 =====
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:mamashop}
+    password: ${RABBITMQ_PASSWORD:}
+    # 連不上時最多等 2 秒（通知是在背景送的，不影響下單；只是不要卡住執行緒太久）
+    connection-timeout: 2s
+    listener:
+      simple:
+        # 處理失敗（例如寄信伺服器錯誤）時不要把訊息放回佇列：否則同一封信會無限重試、一直失敗。
+        # M03 會加上「重試幾次後放到失敗佇列」
+        default-requeue-rejected: false
+  mail:
+    # 本機用 Mailpit（假的寄信伺服器，信會顯示在 http://localhost:8025，不會真的寄出）
+    # 沒設定 MAIL_HOST 時不寄信，只記 log
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    default-encoding: UTF-8
+    properties:
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${MAIL_SMTP_STARTTLS:false}
+      # JavaMail 的逾時預設是「無限」：寄信伺服器卡住時，消費者的執行緒會永遠卡住。一定要設定
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
+
   jpa:
     hibernate:
       # Schema 只由 Flyway 管理，Hibernate 只檢查 Entity 和資料表是否一致
@@ -60,6 +89,12 @@ app:
   cors:
     # 允許呼叫 API 的前端網址，多個用逗號分隔
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  notification:
+    # 訂單通知（M01）。測試預設關閉（src/test/resources/application.properties）
+    enabled: ${NOTIFICATION_ENABLED:true}
+    # 信裡「查看訂單」的連結
+    site-url: ${SITE_URL:http://localhost:5173}
+    mail-from: ${MAIL_FROM:mamaShop <no-reply@localhost>}
   admin:
     # 預設管理員：啟動時若這個 email 還不存在就建立。沒設定則略過
     email: ${ADMIN_EMAIL:}
@@ -83,6 +118,11 @@ management:
         # 只開放 health。其他端點（env、beans、heapdump…）會洩漏設定與記憶體內容，絕對不能公開
         include: health
   health:
+    # 通知用的 RabbitMQ、寄信伺服器掛掉時，網站照常運作：不要讓健康檢查因此變成 DOWN
+    rabbit:
+      enabled: false
+    mail:
+      enabled: false
     redis:
       # Redis 只是快取，掛掉時網站照常運作（直接查資料庫），不要讓健康檢查因此變成 DOWN
       enabled: false

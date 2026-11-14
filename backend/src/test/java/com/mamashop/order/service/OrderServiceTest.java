@@ -22,6 +22,8 @@ import com.mamashop.order.entity.OrderItem;
 import com.mamashop.order.entity.OrderStatus;
 import com.mamashop.order.entity.OrderStatusHistory;
 import com.mamashop.order.entity.PaymentStatus;
+import com.mamashop.order.event.OrderEvent;
+import com.mamashop.order.event.OrderEventType;
 import com.mamashop.order.repository.OrderRepository;
 import com.mamashop.order.repository.OrderStatusHistoryRepository;
 import com.mamashop.product.entity.Product;
@@ -43,6 +45,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
@@ -69,6 +72,7 @@ class OrderServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private OrderNumberGenerator orderNumberGenerator;
     @Mock private OrderStockService orderStockService;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     /** @InjectMocks：用上面的 mock 呼叫 OrderService 的建構子 */
     @InjectMocks private OrderService orderService;
@@ -128,6 +132,9 @@ class OrderServiceTest {
         assertThat(history.getValue().getFromStatus()).isNull();
         assertThat(history.getValue().getToStatus()).isEqualTo(OrderStatus.PENDING_CONFIRM);
         assertThat(history.getValue().getOperator()).isSameAs(customer);
+
+        // 發出「訂單成立」事件（M01）；真正寄信要等交易 commit 之後
+        verify(eventPublisher).publishEvent(new OrderEvent("M2611120000000001", OrderEventType.CREATED));
     }
 
     @Test
@@ -172,7 +179,7 @@ class OrderServiceTest {
         assertThatThrownBy(() -> orderService.createOrder(USER_ID, homeDelivery(item(1L, 1))))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.INSUFFICIENT_STOCK);
-        verifyNoInteractions(orderRepository, historyRepository);
+        verifyNoInteractions(orderRepository, historyRepository, eventPublisher);
     }
 
     @Test

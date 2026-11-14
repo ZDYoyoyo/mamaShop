@@ -8,7 +8,8 @@
 使用者 ──80──▶ web（Nginx）──┬── /            前端網頁（Vue 建置好的靜態檔）
                               ├── /uploads/    商品圖片（直接讀 volume）
                               └── /api/ ──▶ backend（Spring Boot）──▶ db（PostgreSQL）
-                                               └──▶ redis（商品快取，R01）
+                                               ├──▶ redis（商品快取，R01）
+                                               └──▶ rabbitmq（訂單通知，M01）──▶ 寄信服務（SMTP）
                                                ↑ 這兩個沒有對外的 port，只有 Docker 內部網路連得到
 ```
 
@@ -112,7 +113,7 @@ openssl rand -base64 48
 openssl rand -base64 18
 ```
 
-- 第一個給 `DB_PASSWORD`，第二個給 `JWT_SECRET`，第三個給 `ADMIN_PASSWORD`
+- 第一個給 `DB_PASSWORD`（`RABBITMQ_PASSWORD` 也用同樣的指令再產生一個），第二個給 `JWT_SECRET`，第三個給 `ADMIN_PASSWORD`
 - `openssl rand`：用密碼學安全的亂數產生器。`-hex` 只有 0-9a-f（放進資料庫連線字串不會有特殊字元問題）
 
 編輯：
@@ -121,7 +122,8 @@ openssl rand -base64 18
 nano deploy/.env
 ```
 
-至少要填：`SITE_URL`（先填 `http://主機IP`）、`DB_PASSWORD`、`JWT_SECRET`、`ADMIN_EMAIL`、`ADMIN_PASSWORD`。存檔：Ctrl+O、Enter；離開：Ctrl+X。
+至少要填：`SITE_URL`（先填 `http://主機IP`）、`DB_PASSWORD`、`JWT_SECRET`、`RABBITMQ_PASSWORD`、`ADMIN_EMAIL`、`ADMIN_PASSWORD`。
+寄信（`MAIL_*`）可以先空著：不會寄信、只記 log，選好寄信服務後再填（見 M01 的 NOTES）。存檔：Ctrl+O、Enter；離開：Ctrl+X。
 
 > 這些值**只存在主機上**。把 `ADMIN_PASSWORD` 記在密碼管理器，第一次登入後台要用。
 
