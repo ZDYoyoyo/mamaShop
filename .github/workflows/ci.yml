@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
-    # 測試用的 PostgreSQL：GitHub 會在 job 開始前啟動這個容器，job 結束後丟掉
+    # 測試用的 PostgreSQL 與 Redis：GitHub 會在 job 開始前啟動這些容器，job 結束後丟掉
     services:
       postgres:
         image: postgres:17-alpine
@@ -46,6 +46,16 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
+      # 商品快取（R01）的測試要用真的 Redis（ProductCacheIntegrationTest）
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
 
     # 後端讀這些環境變數（和本機的 .env 一樣）。CI 沒有 .env，也不設定 APP_PROFILE：不載入測試商品
     env:
@@ -54,6 +64,7 @@ jobs:
       DB_NAME: mamashop_test
       DB_USERNAME: ci
       DB_PASSWORD: ci-password
+      REDIS_HOST: localhost
 
     defaults:
       run:

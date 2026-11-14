@@ -8,6 +8,7 @@
 使用者 ──80──▶ web（Nginx）──┬── /            前端網頁（Vue 建置好的靜態檔）
                               ├── /uploads/    商品圖片（直接讀 volume）
                               └── /api/ ──▶ backend（Spring Boot）──▶ db（PostgreSQL）
+                                               └──▶ redis（商品快取，R01）
                                                ↑ 這兩個沒有對外的 port，只有 Docker 內部網路連得到
 ```
 

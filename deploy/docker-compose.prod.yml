@@ -9,6 +9,7 @@
 #
 # 和本機開發的 docker-compose.yml 的差別：
 #   - 多了 web（Nginx）：提供前端網頁，並把 /api 轉給後端
+#   - redis：商品快取（R01）
 #   - 對外只開 web 的 80 port；資料庫、後端「完全不寫 ports」，只有 Docker 內部網路連得到
 #     （Docker 公開的 port 會繞過 ufw 防火牆，見 docs/deploy/D01-server.md）
 #   - 不載入測試資料、不開 API 文件
@@ -46,6 +47,19 @@ services:
       retries: 10
     # 沒有 ports：只有同一個 Docker 網路裡的 backend 連得到
 
+  # 商品快取（R01）：只是快取，不存硬碟；沒有 ports，只有後端連得到
+  redis:
+    <<: *logging
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    # 不寫硬碟（快取重開就清空沒關係）；最多 64MB，滿了丟掉最久沒用的（allkeys-lru）
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
   backend:
     <<: *logging
     build: ../backend
@@ -53,7 +67,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      # Redis 只是快取：沒有它網站也能運作（直接查資料庫），所以只等它「啟動」，不等健康檢查
+      redis:
+        condition: service_started
     environment:
+      REDIS_HOST: redis
       DB_HOST: db
       DB_PORT: 5432
       DB_NAME: ${DB_NAME}

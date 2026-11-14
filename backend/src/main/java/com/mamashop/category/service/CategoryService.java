@@ -8,6 +8,7 @@ import com.mamashop.category.repository.CategoryRepository;
 import com.mamashop.common.exception.BusinessException;
 import com.mamashop.common.exception.ErrorCode;
 import com.mamashop.common.exception.NotFoundException;
+import com.mamashop.product.cache.ProductCacheEvictor;
 import com.mamashop.product.repository.ProductRepository;
 import java.util.List;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -19,11 +20,14 @@ public class CategoryService {
 
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
+    private final ProductCacheEvictor productCacheEvictor;
 
     // 只有一個建構子時，Spring 會自動用它注入，不用加 @Autowired
-    public CategoryService(CategoryRepository categoryRepository, ProductRepository productRepository) {
+    public CategoryService(CategoryRepository categoryRepository, ProductRepository productRepository,
+                           ProductCacheEvictor productCacheEvictor) {
         this.categoryRepository = categoryRepository;
         this.productRepository = productRepository;
+        this.productCacheEvictor = productCacheEvictor;
     }
 
     // ===== 前台 =====
@@ -65,7 +69,10 @@ public class CategoryService {
         category.setSortOrder(request.sortOrderOrDefault());
         // category 是這個交易裡查出來的（managed 狀態），其實交易結束時 Hibernate 就會比對差異自動 UPDATE
         // （dirty checking）。這裡仍呼叫 saveAndFlush，是為了在方法內就送出 UPDATE、接住唯一鍵衝突
-        return AdminCategoryResponse.from(saveAndFlush(category));
+        AdminCategoryResponse response = AdminCategoryResponse.from(saveAndFlush(category));
+        // 商品詳情裡有分類名稱：這個分類底下的商品都要更新，直接全部清除（分類很少改）
+        productCacheEvictor.evictAll();
+        return response;
     }
 
     /** 只能刪除沒有商品的分類（products.category_id 有外鍵，硬刪也會失敗） */

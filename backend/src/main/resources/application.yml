@@ -26,6 +26,18 @@ spring:
       max-file-size: 10MB
       max-request-size: 11MB
 
+  # ===== 商品快取（R01）=====
+  cache:
+    # redis：用 Redis 快取；none：不快取（測試預設用 none，見 src/test/resources/application.properties）
+    type: ${CACHE_TYPE:redis}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      # Redis 掛掉或卡住時最多等 0.5 秒就放棄、改查資料庫：快取不能拖慢網站
+      timeout: 500ms
+      connect-timeout: 500ms
+
   jpa:
     hibernate:
       # Schema 只由 Flyway 管理，Hibernate 只檢查 Entity 和資料表是否一致
@@ -70,6 +82,10 @@ management:
       exposure:
         # 只開放 health。其他端點（env、beans、heapdump…）會洩漏設定與記憶體內容，絕對不能公開
         include: health
+  health:
+    redis:
+      # Redis 只是快取，掛掉時網站照常運作（直接查資料庫），不要讓健康檢查因此變成 DOWN
+      enabled: false
   endpoint:
     health:
       # 不公開細節（資料庫種類、硬碟空間）：給陌生人看的只有 UP／DOWN

@@ -6,11 +6,13 @@ import static com.mamashop.product.repository.ProductSpecifications.nameContains
 
 import com.mamashop.common.exception.NotFoundException;
 import com.mamashop.common.response.PageResponse;
+import com.mamashop.product.cache.ProductCacheNames;
 import com.mamashop.product.dto.ProductDetailResponse;
 import com.mamashop.product.dto.ProductSummaryResponse;
 import com.mamashop.product.entity.Product;
 import com.mamashop.product.entity.ProductStatus;
 import com.mamashop.product.repository.ProductRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -37,7 +39,14 @@ public class ProductService {
      * @param keyword    商品名稱關鍵字（選填，空白視為沒填）
      * @param page       頁碼，從 1 開始
      * @param size       每頁筆數
+     *
+     * <p>快取（R01）：沒有關鍵字的列表存 Redis，key 是「分類:頁碼:每頁筆數」，例如 all:1:12、3:2:12。
+     * 關鍵字搜尋不快取：關鍵字可以是任何字，每個都存會塞滿 Redis，命中率也低。
+     * 第一次查資料庫、之後直接從 Redis 拿（這個方法不會執行）；商品變動時由 ProductCacheEvictor 清除。
      */
+    @Cacheable(cacheNames = ProductCacheNames.LIST,
+            key = "(#categoryId ?: 'all') + ':' + #page + ':' + #size",
+            condition = "#keyword == null || #keyword.isBlank()")
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryResponse> searchOnSaleProducts(Long categoryId, String keyword, int page, int size) {
         Specification<Product> spec = hasStatus(ProductStatus.ON_SALE);
@@ -53,7 +62,11 @@ public class ProductService {
         return PageResponse.of(result, ProductSummaryResponse::from);
     }
 
-    /** 商品詳情；下架或不存在的商品一律回 404（不讓顧客看到下架商品）。 */
+    /**
+     * 商品詳情；下架或不存在的商品一律回 404（不讓顧客看到下架商品）。
+     * 快取（R01）：key 是商品 id。找不到時丟例外，例外不會被快取。
+     */
+    @Cacheable(cacheNames = ProductCacheNames.DETAIL, key = "#id")
     @Transactional(readOnly = true)
     public ProductDetailResponse getOnSaleProduct(Long id) {
         return productRepository.findByIdAndStatus(id, ProductStatus.ON_SALE)
