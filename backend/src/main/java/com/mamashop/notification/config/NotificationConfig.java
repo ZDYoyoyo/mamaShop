@@ -1,5 +1,6 @@
 package com.mamashop.notification.config;
 
+import com.mamashop.common.config.MessagingFailureConfig;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Queue;
@@ -37,6 +38,8 @@ public class NotificationConfig {
 
     public static final String EXCHANGE = "mamashop.orders";
     public static final String QUEUE = "mamashop.order-notifications";
+    /** 重試後還是失敗的通知（M03，見 MessagingFailureConfig） */
+    public static final String FAILED_QUEUE = "mamashop.order-notifications.failed";
     /** routing key 的前綴：order.created、order.confirmed、order.shipped */
     public static final String ROUTING_KEY_PREFIX = "order.";
 
@@ -53,6 +56,17 @@ public class NotificationConfig {
     @Bean
     Binding orderNotificationBinding(Queue orderNotificationQueue, TopicExchange orderExchange) {
         return BindingBuilder.bind(orderNotificationQueue).to(orderExchange).with(ROUTING_KEY_PREFIX + "*");
+    }
+
+    @Bean
+    Queue orderNotificationFailedQueue() {
+        return QueueBuilder.durable(FAILED_QUEUE).build();
+    }
+
+    @Bean
+    Binding orderNotificationFailedBinding(Queue orderNotificationFailedQueue, TopicExchange failedExchange) {
+        return BindingBuilder.bind(orderNotificationFailedQueue).to(failedExchange)
+                .with(MessagingFailureConfig.FAILED_ROUTING_KEY_PREFIX + ROUTING_KEY_PREFIX + "*");
     }
 
     /** 訊息用 JSON（Jackson 3）傳送，在管理介面也看得懂；Spring Boot 會自動用在 RabbitTemplate 與 @RabbitListener */

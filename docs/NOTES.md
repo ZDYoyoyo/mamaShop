@@ -926,3 +926,70 @@ OrderAutoCompleteListener → AdminOrderService.autoComplete：還是「已送�
 - ℹ️ `AdminOrderServiceTest`：送達發出事件；`autoComplete` 操作者 NULL、已完成／已退回／不存在的訂單不動
 - ℹ️ 測試預設關閉（`app.order-timeout.enabled=false`）。後端 331 個測試全部通過
 - ℹ️ 實測：RabbitMQ 裡等待佇列的參數是 `x-dead-letter-exchange=mamashop.order-timeout`、`x-dead-letter-routing-key=auto-complete`（`docker compose exec rabbitmq rabbitmqctl list_queues name arguments messages`）；log 顯示排定後 2.04 秒自動完成
+
+## M03 失敗處理（重試＋失敗佇列）
+
+### 流程
+
+```
+消費者丟例外（寄信伺服器連不上、資料庫剛好重啟…）
+  └─ 重試：等 2 秒 → 再試、等 6 秒 → 再試（共 3 次；listener.simple.retry）
+        │ 還是失敗
+        ▼ MessageRecoverer（MessagingFailureConfig）
+exchange mamashop.failed（topic），routing key「error.」＋原本的 key，header 加上錯誤訊息與 stack trace
+  ├─ error.order.*        → mamashop.order-notifications.failed   （M01 通知信）
+  └─ error.auto-complete  → mamashop.order-auto-complete.failed   （M02 自動完成）
+＋ ERROR log：「訊息重試後仍然失敗，已移到失敗佇列（routing key …，內容 {"orderNo":…}）：原因」
+```
+
+生產者這邊：`spring.rabbitmq.template.retry`，RabbitMQ 連不上時重試 2 次（等 1 秒、2 秒），在 @Async 執行緒裡，不影響回應時間。
+
+### 設計
+
+- ℹ️ **重試在消費者的執行緒裡做（stateless retry）**：訊息不回到佇列，在記憶體裡等一下再呼叫一次。好處是簡單、不會讓失敗的訊息在佇列裡打轉；代價是重試的那 8 秒，這個消費者不處理別的訊息（家庭小店的量沒問題）
+- ℹ️ **用 RepublishMessageRecoverer，不用佇列的 x-dead-letter-exchange**：
+  - 已經存在的佇列不能改參數，加 DLX 得刪掉重建（M01 的佇列已經在用）
+  - 死信只知道「被拒絕」，Republish 會在 header 放 `x-exception-message`、`x-exception-stacktrace`、`x-original-routingKey`，查原因方便
+- ℹ️ **每個來源一個失敗佇列**：修好之後整個佇列搬回原本的佇列就能重送（見下面的指令）
+- ℹ️ **失敗佇列沒有消費者、不會過期**：一直留著直到有人處理。這就是「不會默默遺失」
+- ℹ️ **重送是安全的**：通知信重送頂多多寄一封；自動完成本來就冪等（不是「已送達」就略過）
+- ℹ️ 失敗的 log 有訊息內容（只有訂單編號、事件種類，沒有個資），正式環境不用開管理介面也知道是哪一筆
+
+### 失敗佇列怎麼處理（正式環境，在主機上）
+
+```bash
+docker compose -f deploy/docker-compose.prod.yml exec rabbitmq rabbitmqctl list_queues name messages
+```
+
+- 列出每個佇列有幾則訊息。`*.failed` 不是 0 就要處理。原因看後端 log：`logs backend | grep 失敗佇列`
+
+修好原因後（例如寄信帳密改對了、重啟後端），把失敗的訊息搬回原本的佇列重新處理：
+
+```bash
+docker compose -f deploy/docker-compose.prod.yml exec rabbitmq rabbitmq-plugins enable rabbitmq_shovel
+docker compose -f deploy/docker-compose.prod.yml exec rabbitmq rabbitmqctl set_parameter shovel replay-notifications '{"src-protocol":"amqp091","src-uri":"amqp://","src-queue":"mamashop.order-notifications.failed","src-delete-after":"queue-length","dest-protocol":"amqp091","dest-uri":"amqp://","dest-queue":"mamashop.order-notifications"}'
+```
+
+- `rabbitmq-plugins enable rabbitmq_shovel`：打開 Shovel 外掛（RabbitMQ 內建，「把訊息從 A 搬到 B」的工具）。只要做一次
+- `set_parameter shovel replay-notifications '...'`：建立一個叫 replay-notifications 的搬運工作
+  - `src-queue` → `dest-queue`：從失敗佇列搬回通知佇列
+  - `src-uri`／`dest-uri` 是 `amqp://`：同一台 RabbitMQ 內部直接連，不用帳密
+  - `src-delete-after: queue-length`：**只搬現在有的這幾則**，搬完這個工作自己刪掉（不會一直搬）
+- 自動完成的失敗佇列：把三個地方換成 `replay-auto-complete`、`mamashop.order-auto-complete.failed`、`mamashop.order-auto-complete`
+- 本機實測：失敗佇列 2 則 → 執行後失敗佇列 0、通知佇列 2，shovel 自動刪除
+
+不要重送、直接丟掉：`exec rabbitmq rabbitmqctl purge_queue mamashop.order-notifications.failed`
+
+### 刻意沒做／之後要注意
+
+- ⚠️ **送進 RabbitMQ 之前就失敗（RabbitMQ 停機超過重試時間、或 commit 後後端當機），通知還是會遺失**（M01、M02 寫的缺口）。生產者重試只能擋短暫斷線。完全避免要用 Outbox 模式，目前規模先不做
+- 🔲 **沒有自動告警**：失敗佇列有訊息時不會主動通知。目前靠看 log／`list_queues`。之後可以在 D07 的監控加一項「失敗佇列訊息數 > 0」，或在後台儀表板顯示
+- 🔲 沒有區分「重試也沒用」的錯誤（例如訂單被刪掉 → NotFound），一樣會重試 3 次再進失敗佇列；只多花 8 秒，不影響正確性
+- ℹ️ RabbitMQ 停機期間「已經在佇列裡」的訊息不受影響（durable＋persistent），恢復後繼續處理
+
+### 測試
+
+- ℹ️ `OrderNotificationFailureTest`（真的 RabbitMQ，寄信用 Mockito 控制失敗次數，重試間隔縮成 100 ms）：
+  - 第一次寄信失敗、第二次成功 → 只寄 2 次、失敗佇列是空的
+  - 一直失敗 → 正好試 3 次，訊息進失敗佇列，內容有訂單編號，header 有錯誤訊息與原本的 routing key，之後不再重試
+- ℹ️ 原本 M01、M02 的整合測試照樣通過。後端 333 個測試全部通過

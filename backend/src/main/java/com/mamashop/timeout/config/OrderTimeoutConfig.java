@@ -1,10 +1,12 @@
 package com.mamashop.timeout.config;
 
+import com.mamashop.common.config.MessagingFailureConfig;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
+import org.springframework.amqp.core.TopicExchange;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -41,6 +43,8 @@ public class OrderTimeoutConfig {
     public static final String AUTO_COMPLETE_WAIT_QUEUE = "mamashop.order-auto-complete.wait";
     /** 處理佇列：過期的訊息被轉到這裡，由消費者處理 */
     public static final String AUTO_COMPLETE_QUEUE = "mamashop.order-auto-complete";
+    /** 處理時重試後還是失敗（M03，見 MessagingFailureConfig） */
+    public static final String AUTO_COMPLETE_FAILED_QUEUE = "mamashop.order-auto-complete.failed";
     public static final String AUTO_COMPLETE_WAIT_KEY = "auto-complete.wait";
     public static final String AUTO_COMPLETE_KEY = "auto-complete";
 
@@ -70,5 +74,16 @@ public class OrderTimeoutConfig {
     @Bean
     Binding orderAutoCompleteBinding(Queue orderAutoCompleteQueue, DirectExchange orderTimeoutExchange) {
         return BindingBuilder.bind(orderAutoCompleteQueue).to(orderTimeoutExchange).with(AUTO_COMPLETE_KEY);
+    }
+
+    @Bean
+    Queue orderAutoCompleteFailedQueue() {
+        return QueueBuilder.durable(AUTO_COMPLETE_FAILED_QUEUE).build();
+    }
+
+    @Bean
+    Binding orderAutoCompleteFailedBinding(Queue orderAutoCompleteFailedQueue, TopicExchange failedExchange) {
+        return BindingBuilder.bind(orderAutoCompleteFailedQueue).to(failedExchange)
+                .with(MessagingFailureConfig.FAILED_ROUTING_KEY_PREFIX + AUTO_COMPLETE_KEY);
     }
 }

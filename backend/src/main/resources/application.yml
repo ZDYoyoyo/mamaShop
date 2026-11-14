@@ -48,9 +48,24 @@ spring:
     connection-timeout: 2s
     listener:
       simple:
-        # 處理失敗（例如寄信伺服器錯誤）時不要把訊息放回佇列：否則同一封信會無限重試、一直失敗。
-        # M03 會加上「重試幾次後放到失敗佇列」
+        # 處理失敗時不要把訊息放回佇列尾端：否則一直失敗的訊息會無限循環、佔住消費者。
+        # 改成下面的重試，重試完還是失敗就移到失敗佇列（M03，MessagingFailureConfig）
         default-requeue-rejected: false
+        # 消費者丟例外時，在同一個執行緒裡重試：等 2 秒、再等 6 秒（共 3 次）。
+        # 寄信伺服器暫時連不上、資料庫剛好重啟這類「等一下就好」的錯誤，大多重試就會成功
+        retry:
+          enabled: true
+          max-retries: 2
+          initial-interval: 2s
+          multiplier: 3
+          max-interval: 10s
+    template:
+      # 送訊息（生產者）時 RabbitMQ 連不上：重試 2 次（等 1 秒、2 秒）。送訊息是在背景執行緒（@Async），不影響回應時間
+      retry:
+        enabled: true
+        max-retries: 2
+        initial-interval: 1s
+        multiplier: 2
   mail:
     # 本機用 Mailpit（假的寄信伺服器，信會顯示在 http://localhost:8025，不會真的寄出）
     # 沒設定 MAIL_HOST 時不寄信，只記 log
