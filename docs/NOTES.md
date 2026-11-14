@@ -32,6 +32,8 @@ PR #1–#17 已 merge，但你還沒看過。B 系列完成後一起研究。建
 | [#17](https://github.com/ZDYoyoyo/mamaShop/pull/17) | B14 管理員帳號管理 | 已 merge，未 review |
 
 > #10～#17 已依序 merge。
+>
+> #18 之後（F、A、D、R、M、P 系列，到 #45）也都已 merge、還沒 review。每個任務的設計重點、踩到的坑在下方對應的段落；**建議優先看 B08、R02、P01、P03**（交易、併發、鎖、對外部系統的簽章驗證）。
 
 ---
 
@@ -43,6 +45,15 @@ PR #1–#17 已 merge，但你還沒看過。B 系列完成後一起研究。建
 - 🔲 **正式環境不要設定 `APP_PROFILE=dev`**，否則會寫入測試商品
 - 🔲 **上傳目錄要掛 Docker volume 並納入備份**（D03、D05），否則重建容器時商品圖片會消失
 - 🔲 **登入失敗次數限制**：目前沒有，可能被暴力破解（建議 Nginx rate limit 或 R 階段用 Redis）
+- 🔲 **`RABBITMQ_PASSWORD`**：正式環境用 `openssl rand -hex 24` 產生（M01，D03 指南第 3 步）
+- 🔲 **寄信服務還沒選**（M01）：`MAIL_*` 沒填時不會寄信、只記 log。選好後填 `deploy/.env`，實際寄一封確認沒進垃圾郵件
+- 🔲 **綠界金流**（P01）：簽約、確認費用與撥款方式後，把正式商店的 `ECPAY_MERCHANT_ID`／`HASH_KEY`／`HASH_IV` 填進 `deploy/.env`、`ECPAY_ENABLED=true`。沒設定時結帳只有貨到付款
+- 🔲 **綠界物流**（P02、P03）：申請物流服務後填 `ECPAY_LOGISTICS_*`（商店代號、金鑰、寄件人）。沒設定時結帳手動填門市、後台手動填物流單號
+- 🔲 **有網域與 HTTPS（D04）之後，實際走一次綠界的完整流程**：本機收不到綠界的通知（付款結果、物流狀態），這一段只用「自己算簽章模擬通知」驗證過。用測試商店刷一次測試卡、寄一次超商包裹，確認通知真的送得到
+- 🔲 **隱私權政策頁面**（PLAN 的 D08）：還沒有這個頁面，內容需要家人的資料（賣家名稱、聯絡方式、蒐集哪些個資與用途）
+- 🔲 **備份（D05）**：還沒有備份腳本與還原測試
+- 🔲 **外部監控**（D07）：網站上線後照 `docs/deploy/D07-monitoring.md` 第 3 節設定
+- 🔲 **GitHub 的分支保護**（D06）：設定「CI 沒過不能合併」
 
 ---
 
@@ -50,16 +61,16 @@ PR #1–#17 已 merge，但你還沒看過。B 系列完成後一起研究。建
 
 - ℹ️ **Spring Boot 4.1.2**：原計畫 3.x，但 3.x 開源支援已結束，改用 4.x。網路教學多是 3.x，差異：starter 名稱拆細（`spring-boot-starter-webmvc`、`spring-boot-starter-flyway`）、Jackson 3（套件名 `tools.jackson`）、測試註解的套件路徑不同
 - ℹ️ **`.env` 不要寫中文**：Spring 用 ISO-8859-1 讀 `.env`，中文會變亂碼（實際踩過，見 B06）
-- ℹ️ **後端測試需要資料庫在跑**：`docker compose up -d db` 之後才能 `mvnw test`
-- 🔲 **CI（D06）**：因為測試要連資料庫，GitHub Actions 要另外起 PostgreSQL service，或改用 Testcontainers
+- ℹ️ **後端測試需要資料庫、Redis、RabbitMQ 在跑**：`docker compose up -d db redis rabbitmq mailpit` 之後才能 `mvnw test`（R01 之後要 Redis、M01 之後要 RabbitMQ；一開始只需要 `db`）
+- ✅ **CI（D06）**：因為測試要連資料庫，GitHub Actions 要另外起 PostgreSQL service，或改用 Testcontainers　→ ✅ D06 已完成：CI 用 service container 啟動 PostgreSQL、Redis、RabbitMQ
 - ℹ️ **跑測試會在本機資料庫建立預設管理員**：`@SpringBootTest` 啟動時會執行 `AdminAccountInitializer`，這一步不在測試交易內，不會 rollback（B06 之後）
 
 ---
 
 ## B00 建立 repo
 
-- 🔲 **沒有 `.gitattributes`**：Windows 上 Git 可能把 shell 腳本轉成 CRLF，放到 Linux 或 Docker 執行會失敗（D 階段的部署、備份腳本）。建議加一行 `* text=auto eol=lf`。`backend/` 裡 start.spring.io 附的那份只管 `mvnw`
-- 🔲 `frontend/.gitkeep`、`deploy/.gitkeep` 是佔位用的，F01、D03 放入檔案後刪除
+- ✅ **沒有 `.gitattributes`**：Windows 上 Git 可能把 shell 腳本轉成 CRLF，放到 Linux 或 Docker 執行會失敗（D 階段的部署、備份腳本）。建議加一行 `* text=auto eol=lf`。`backend/` 裡 start.spring.io 附的那份只管 `mvnw`　→ ✅ 已加上根目錄的 `.gitattributes`（`*.sh` 一律 LF），見文件最後的「整體檢查」
+- ✅ `frontend/.gitkeep`、`deploy/.gitkeep` 是佔位用的，F01、D03 放入檔案後刪除　→ ✅ 已刪除
 
 ## B01 初始化後端
 
@@ -91,7 +102,7 @@ PR #1–#17 已 merge，但你還沒看過。B 系列完成後一起研究。建
 - ℹ️ 沒有覆寫 `equals`／`hashCode`：Entity 不要在存檔前放進 `HashSet`
 - ℹ️ `updated_at` 由 Hibernate 的 `@UpdateTimestamp` 維護，**直接用 SQL 更新資料時不會自動更新**
 - ℹ️ `OrderItem` 沒有自己的 Repository：透過 `Order.addItem()` 加入，存 `Order` 時一起存（cascade）
-- 🔲 訂單狀態轉換規則（`canTransitionTo`）還沒寫，在 B09／B10 實作
+- ✅ 訂單狀態轉換規則（`canTransitionTo`）還沒寫，在 B09／B10 實作　→ ✅ B09／B10 已實作（`OrderStatus`）
 
 ## B04 共用基礎
 
@@ -118,7 +129,7 @@ PR #1–#17 已 merge，但你還沒看過。B 系列完成後一起研究。建
 - ℹ️ **更換 `JWT_SECRET` 會讓所有人被登出**
 - ℹ️ 密碼限制 8–72 個英數字或符號（不能用中文，BCrypt 72 bytes 上限）
 - 🔲 **沒做**：refresh token、忘記密碼、Email 驗證（需要寄信，可以在 M01 之後再考慮）
-- 🔲 **前端 token 存放位置**：在 F01 決定（localStorage 有 XSS 風險，要評估）
+- ✅ **前端 token 存放位置**：在 F01 決定（localStorage 有 XSS 風險，要評估）　→ ✅ F01 決定存 localStorage（理由與防護見 F01、F04）
 - ℹ️ `/api/users/me` 是額外加的（PLAN 沒有列），用來驗證登入狀態，F04 也會用到
 
 ## B07 後台商品管理＋圖片上傳
@@ -145,9 +156,9 @@ PR #1–#17 已 merge，但你還沒看過。B 系列完成後一起研究。建
 - ℹ️ `/uploads/**` 不用登入就能讀（商品圖片本來就公開），瀏覽器快取 1 年（檔名不會重複，所以安全）
 - ℹ️ 本機上傳的檔案在 `backend/uploads/`（已在 `.gitignore`）
 - ℹ️ MockMvc 測試不會經過 Tomcat 的上傳大小限制，所以程式內也檢查一次大小；Tomcat 那層用 curl 實測過（11MB → 413）
-- 🔲 **iPhone 預設的 HEIC 格式不支援**：家人用 iPhone 拍照要把相機設成「最相容」，或在後台前端（A02）上傳前轉檔
-- 🔲 **照片的 EXIF 沒有移除**：手機照片可能含拍攝地點（GPS），在家拍的商品照會洩漏住址。建議 A02 上傳前在前端壓縮（用 canvas 重新輸出會去掉 EXIF），或之後在後端重新編碼
-- 🔲 **沒有縮圖或壓縮**：手機照片動輒 3–5MB，列表頁會很慢。同樣建議 A02 上傳前壓縮
+- ✅ **iPhone 預設的 HEIC 格式不支援**：家人用 iPhone 拍照要把相機設成「最相容」，或在後台前端（A02）上傳前轉檔　→ ✅ A02：上傳前在瀏覽器轉成 JPG（Safari 可讀 HEIC；Chrome 讀不了時會提示）
+- ✅ **照片的 EXIF 沒有移除**：手機照片可能含拍攝地點（GPS），在家拍的商品照會洩漏住址。建議 A02 上傳前在前端壓縮（用 canvas 重新輸出會去掉 EXIF），或之後在後端重新編碼　→ ✅ A02：上傳前用 canvas 重畫，EXIF（含 GPS）全部移除
+- ✅ **沒有縮圖或壓縮**：手機照片動輒 3–5MB，列表頁會很慢。同樣建議 A02 上傳前壓縮　→ ✅ A02：上傳前壓縮（長邊 1600px、JPG 0.85）
 - 🔲 **每個商品只有一張圖片**（PLAN 的 `image_path` 是單一欄位）；要多張圖需要新的資料表
 - ℹ️ `ProductRepository.findAll(spec, pageable)` 加了 `@EntityGraph`，前台商品列表（B05）的查詢也會一起 JOIN 分類，查詢數仍是 2 個
 
@@ -161,9 +172,9 @@ PR #1–#17 已 merge，但你還沒看過。B 系列完成後一起研究。建
 - ℹ️ 建立後狀態 `PENDING_CONFIRM`、付款 `COD`／`UNPAID`；寫入第一筆狀態紀錄（操作者＝顧客）
 - ℹ️ **B11 的併發測試提前做了**（`OrderConcurrencyTest`：庫存 10、50 人搶，剛好 10 筆成功；另加死結測試）。B11 只剩 Service 單元測試與 Controller 權限測試
 - ℹ️ 訂單相關測試沒有用 `@Transactional`（要測真正的 commit／rollback），資料在 `@AfterEach` 自己清除
-- 🔲 **重複送出**：連點兩下會建立兩筆訂單。F05 前端送出後要停用按鈕；R02 再從後端用一次性 token 擋
+- ✅ **重複送出**：連點兩下會建立兩筆訂單。F05 前端送出後要停用按鈕；R02 再從後端用一次性 token 擋　→ ✅ F05（送出後停用按鈕）＋R02（一次性識別碼）
 - 🔲 **訂單編號重複**機率極低（同日 100 筆約百萬分之一），發生時整筆回滾並回 500，顧客重送即可
-- 🔲 **下單後沒有通知**：家人要自己到後台看新訂單（A05 首頁概覽會顯示待確認數量；M01 才有 Email 通知）
+- 🔲 **下單後沒有通知**：家人要自己到後台看新訂單（A05 首頁概覽會顯示待確認數量；M01 才有 Email 通知）　→ 顧客的通知信 M01 已完成；**家人的「新訂單」通知還是沒有**
 - ℹ️ 管理員帳號也能下單（沒有限制只有 USER 能買）
 - ℹ️ 收件人手機只接受台灣手機格式（09 開頭 10 碼），市話不行
 
@@ -204,9 +215,9 @@ PR #1–#17 已 merge，但你還沒看過。B 系列完成後一起研究。建
 - ℹ️ PLAN 原本寫「確認收款」，因為不收轉帳，改成「確認訂單」；收款在「完成」時一起標記
 - ℹ️ 列表預設新到舊
 - 🔲 **列表沒有關鍵字搜尋**（訂單編號、收件人、電話）：顧客打電話來時要用編號查詳情。需要的話 A04 時再加
-- 🔲 **退回的訂單付款狀態維持「未付款」**；接金流（P01）後，已付款的訂單取消／退回要處理退款（`REFUNDED`）
+- 🔲 **退回的訂單付款狀態維持「未付款」**；接金流（P01）後，已付款的訂單取消／退回要處理退款（`REFUNDED`）　→ P01 的做法：已付款的訂單取消／退回時，後台詳情頁提醒「到綠界後台退款」，退款是人工處理；**`REFUNDED` 目前程式不會設定**（沒有「標記已退款」的功能），見文件最後的「整體檢查」
 - 🔲 **出貨後填錯物流單號無法修改**（只能在出貨時填一次）
-- 🔲 **送達／完成需要家人手動按**：超商取貨沒有串接物流狀態（P03 才自動）
+- ✅ **送達／完成需要家人手動按**：超商取貨沒有串接物流狀態（P03 才自動）　→ ✅ 超商取貨：P03 依綠界物流通知自動更新；宅配：M02 送達 7 天自動完成（「已送達」仍要手動按）
 
 ## B11 測試
 
@@ -225,7 +236,7 @@ PR #1–#17 已 merge，但你還沒看過。B 系列完成後一起研究。建
 - ℹ️ **修正了 B06 的偶發失敗測試**：竄改 JWT 的測試原本是換掉簽章最後一個字元，但那個字元有 4 個 bit 是 Base64 補位，`A` → `B` 只改到補位，簽章其實沒變，約 1/64 的機率測試失敗。改成竄改簽章中間的字元，並新增「把 payload 的會員 id 改成別人」的偽造測試
 - ℹ️ 併發測試在 B08–B10 已經做了（庫存搶購、死結、重複取消、管理員同時操作）
 - ℹ️ Controller 參數測試只關掉 Security filter，直接設定 `SecurityContextHolder` 模擬登入者
-- 🔲 **CI（D06）**：整合測試需要 PostgreSQL；GitHub Actions 要加 `services: postgres`，或改用 Testcontainers
+- ✅ **CI（D06）**：整合測試需要 PostgreSQL；GitHub Actions 要加 `services: postgres`，或改用 Testcontainers　→ ✅ D06 已完成
 - 🔲 **沒有測試覆蓋率報告**（JaCoCo）；需要的話 D06 時一起加
 
 ## B12 Docker 化
@@ -241,8 +252,8 @@ PR #1–#17 已 merge，但你還沒看過。B 系列完成後一起研究。建
 - ℹ️ 在 Claude 的雲端環境驗證時，因為網路代理會重新簽 TLS 憑證，另外用一份「多信任代理 CA」的 Dockerfile 建置（只在暫存目錄，沒有 commit）。在你的電腦上直接用 `docker compose up --build` 即可
 - 🔲 **映像檔約 400MB**（JRE + Spring Boot 依賴）。之後可以用 Spring Boot 的 layered jar 讓「只改程式碼」時推送更少的資料，D03 部署時再評估
 - 🔲 **容器時區是 UTC**：log 時間會比台灣慢 8 小時（資料庫存的是 `TIMESTAMPTZ`，訂單編號也用台灣日期，資料本身不受影響）
-- 🔲 **沒有後端的 healthcheck**：D07 加入 Actuator 後再補
-- 🔲 **正式環境的 compose 在 D03**：會加 Nginx、資料庫不對外開 port、`restart` 策略、log 輪替
+- ✅ **沒有後端的 healthcheck**：D07 加入 Actuator 後再補　→ ✅ D07 已完成
+- ✅ **正式環境的 compose 在 D03**：會加 Nginx、資料庫不對外開 port、`restart` 策略、log 輪替　→ ✅ D03、D07 已完成
 
 ## B13 API 文件
 
@@ -293,7 +304,7 @@ PR #1–#17 已 merge，但你還沒看過。B 系列完成後一起研究。建
 - ℹ️ `npm audit`：正式依賴 0 個漏洞；開發工具有 11 個 moderate（不會打包進網站）
 - ℹ️ `frontend/.gitattributes`（create-vue 附的）已設定 LF 換行
 - ✅ **UI 元件庫**：前台也用 Element Plus（F02 決定）
-- 🔲 **CI（D06）** 要加 `npm ci`、`npm run lint`、`npm run test:unit -- --run`、`npm run build`
+- ✅ **CI（D06）** 要加 `npm ci`、`npm run lint`、`npm run test:unit -- --run`、`npm run build`　→ ✅ D06 已完成
 
 ## F02 商品瀏覽
 
@@ -369,9 +380,9 @@ PR #1–#17 已 merge，但你還沒看過。B 系列完成後一起研究。建
 - ℹ️ 宅配顯示地址欄位、超商取貨顯示超商／店號／門市名稱（`v-if` 切換，隱藏的欄位不會被驗證）；和後端 `@ValidShippingInfo` 一致
 - ℹ️ 完成頁向後端查詢訂單（`GET /api/orders/{orderNo}`），重新整理也看得到，顯示的是後端實際成立的金額
 - ℹ️ 實測：3 次完整流程（未登入 → 登入 → 結帳 → 完成）都成功，庫存 50 → 44，取消後恢復 50
-- 🔲 **超商門市要顧客自己查店號**（頁面提示到超商官網查詢）；電子地圖選店在 P02
+- ✅ **超商門市要顧客自己查店號**（頁面提示到超商官網查詢）；電子地圖選店在 P02　→ ✅ P02：綠界電子地圖選門市（沒開電子地圖時才手動填）
 - 🔲 **沒有「常用地址」**：每次都要重新填地址
-- 🔲 **下單後家人不會收到通知**（M01）；顧客也沒有確認信
+- 🔲 **下單後家人不會收到通知**（M01）；顧客也沒有確認信　→ 顧客的確認信 M01 已完成；家人的通知還是沒有
 - ℹ️ 驗證過程中曾有一次「登入後回到首頁而不是結帳頁」，之後重跑 5 次都無法重現，判斷是當時測試腳本在頁面切換時就操作造成的。上線前的手機實測（D08）請再留意一次
 
 ## F06 我的訂單
@@ -390,7 +401,7 @@ PR #1–#17 已 merge，但你還沒看過。B 系列完成後一起研究。建
 - ℹ️ 實測（真實後端）：列表顯示兩筆訂單、備貨中的訂單完成 2 步且沒有取消按鈕、取消待確認訂單後顯示「已取消」與時間、不存在的訂單顯示「找不到這筆訂單」，瀏覽器無錯誤；測試資料先用管理員取消（還原庫存）再刪除
 - 🔲 **沒有「再買一次」、沒有依狀態篩選**：範圍外
 - 🔲 **取消不能填原因**：後端顧客取消 API 沒有原因欄位
-- 🔲 **訂單狀態改變不會通知顧客**（M01）
+- ✅ **訂單狀態改變不會通知顧客**（M01）　→ ✅ M01：下單、確認（或線上付款成功）、出貨會寄信；取消、送達、完成沒有
 - ⚠️ **開發環境的小狀況**：Vite dev server 第一次用到新的 Element Plus 元件時會重新最佳化依賴並重新整理頁面，自動化測試剛好在這時候操作會失敗，重跑即可。正式版（`npm run build`）不會發生
 
 ## F07 手機版面
@@ -625,7 +636,7 @@ F02～F06 做頁面時已經有載入中（骨架畫面）、錯誤、空狀態�
 
 - 🔲 **沒有零停機更新**：更新後端時約 10～20 秒回 502（前端顯示「伺服器暫時無法使用」）。家庭小店可以接受；需要的話之後用兩個後端容器輪流更新
 - 🔲 **在主機上建置映像檔**：簡單但慢、吃記憶體。D06（CI）之後可以改成 GitHub Actions 建好映像檔、主機只負責下載
-- 🔲 HTTPS、HSTS 在 D04；log 輪替、健康檢查在 D07；備份在 D05
+- 🔲 HTTPS、HSTS 在 D04；log 輪替、健康檢查在 D07；備份在 D05　→ log 輪替、健康檢查 D07 已完成；HTTPS（D04）、備份（D05）還沒做
 
 ## D06 CI（GitHub Actions）
 
@@ -911,7 +922,7 @@ OrderAutoCompleteListener → AdminOrderService.autoComplete：還是「已送�
 
 ### 刻意沒做／之後要注意
 
-- 🔲 **「線上付款逾時未付款自動取消並歸還庫存」**：要等接金流（P 系列）才有「待付款」的訂單。做法相同：下單時送一則 30 分鐘的訊息到另一個等待佇列，消費者檢查還是「待付款」就取消＋歸還庫存（`OrderStockService.restore`）。注意要和「付款成功的通知」競爭：用狀態檢查＋`@Version` 保證只有一邊成功
+- ✅ **「線上付款逾時未付款自動取消並歸還庫存」**：要等接金流（P 系列）才有「待付款」的訂單。做法相同：下單時送一則 30 分鐘的訊息到另一個等待佇列，消費者檢查還是「待付款」就取消＋歸還庫存（`OrderStockService.restore`）。注意要和「付款成功的通知」競爭：用狀態檢查＋`@Version` 保證只有一邊成功　→ ✅ P01 已完成（另一組等待佇列 `mamashop.order-payment-timeout`）
 - ⚠️ **排定的時候 RabbitMQ 連不上 → 這筆訂單不會自動完成**（只記 log），家人照樣可以手動完成，不會出錯。要補可以加一個每天跑一次的排程：找「已送達超過 N 天」的宅配訂單補做（autoComplete 本來就冪等）。目前規模先記下來
 - ⚠️ **處理失敗（例如那一刻資料庫連不上）的訊息會被丟掉**（`default-requeue-rejected=false`），同上，M03 處理重試與失敗佇列
 - ⚠️ 測試時 `auto-complete-after` 縮成 2 秒；**不要在正式環境設很短的值**，家人來不及處理退貨就被自動完成
@@ -1294,3 +1305,56 @@ print(urllib.parse.urlencode(p))
 PY
 curl -X POST localhost:8080/api/logistics/ecpay/notify -H 'content-type: application/x-www-form-urlencoded' --data @notify.txt
 ```
+
+## 整體檢查（P03 完成後）
+
+P 系列做完後整個專案檢查一次：PLAN 的完成狀況、後來的任務讓前面的程式或註解變得不對的地方。
+
+### 修掉的問題（都是 P01 加入線上付款後，和原本後台流程接不上的地方）
+
+- ⚠️ **管理員可以手動「確認」還沒付款的線上付款訂單**：
+  - 原因：B10 寫的時候「待付款 → 備貨中」本來就允許（狀態機），P01 沒有回頭擋
+  - 後果：訂單變成「備貨中＋未付款」，顧客不能再付款（只有待付款能付）、逾時不會自動取消、超商取貨不代收貨款 → 等於沒收錢就出貨。之後顧客如果付款成功，狀態紀錄還會寫「請退款」
+  - 修正：`AdminOrderService.confirm` 擋下待付款的訂單；後台的待付款訂單只顯示「取消訂單」，並說明「付款成功會自動確認」
+  - 狀態機沒改（「待付款 → 備貨中」系統還是要用）：**狀態機管「哪個狀態能到哪個狀態」，「誰可以做」寫在 Service**
+- ⚠️ **「完成」會把線上付款的付款時間蓋掉**：
+  - 原因：B10 的 `complete`、M02 的 `autoComplete` 都是「標記已付款＋付款時間 = 現在」，對貨到付款是對的
+  - 後果：線上付款的訂單 `paid_at` 從「金流通知的時間」變成「訂單完成的時間」，和綠界的紀錄對不上
+  - 修正：改成共用的 `markPaidIfNeeded`（已經付款的不動）。P03 的物流通知本來就是這樣寫的
+- ⚠️ **後台訂單列表沒有「待付款」的分頁**：A04 當時留了註解「P01 再加」，P01 忘了加。已補上
+- ℹ️ 這三個都補了測試（`AdminOrderServiceTest`、`PaymentIntegrationTest`、前端的 `adminOrderActions`、`AdminOrdersView`、`AdminOrderDetailView`）
+- 💡 教訓：新功能做完，要回頭檢查「原本的每個操作，遇到新的狀態組合會怎樣」。這次是先寫了新流程的測試，沒有測「舊操作＋新狀態」
+- ⚠️ **`ProductCacheIntegrationTest.detail_isCached` 在跑整套測試時失敗過一次**（單獨跑 3 次、整套再跑一次都通過，這次也沒有改到快取的程式）。沒有查出確切原因；推測是機器忙的時候 Redis 回應超過 0.5 秒的逾時，程式照設計改查資料庫，測試就拿到「不是快取」的值。之後如果在 CI 偶爾看到這個測試失敗，先重跑；常常發生的話再處理（例如這個測試把逾時調長）
+
+### 補上的說明與註解
+
+- ℹ️ `AdminOrderService` 類別說明：這個類別現在有兩種呼叫者（管理員用樂觀鎖、系統用悲觀鎖），以及為什麼不同
+  - `loadForUpdate` 改名 `loadAndCheckVersion`：原本的名字像是有鎖資料列，其實只比對版本號
+- ℹ️ `OrderStatus`、`PaymentStatus`、`CvsBrand`：每個值現在是誰、什麼時候設定的
+  - `PaymentStatus.REFUNDED` 目前程式不會設定
+  - `CvsBrand.OK` 已停止服務但不能刪
+- ℹ️ `OrderService`、`CreateOrderRequest`：原本寫「貨到付款」「第 1 階段手動填門市」的地方
+- ℹ️ `OrderTimeoutConfig`、`MessagingFailureConfig`：補上 P01 加的第二組延遲佇列與失敗佇列；提醒新增 `@RabbitListener` 時要一起宣告 `.failed` 佇列
+- ℹ️ `LogisticsController`：現在還包含綠界的兩個回呼
+- ℹ️ 文件：
+  - README：Spring Boot 版本寫錯（3 → 4）、技術棧、啟動步驟的說明
+  - `docs/deploy/D03-deploy.md`：服務數量、怎麼啟用綠界
+  - 這份 NOTES：已經完成卻還標 🔲 的項目改成 ✅，D08 清單補上後來任務的待辦
+  - PLAN 的「資料表設計」：補上 P 系列的變更
+  - `docker-compose` 檔案開頭的說明
+- ✅ 加上根目錄的 `.gitattributes`（`*.sh text eol=lf`）：在 Windows 上 clone 時，shell 腳本不會被轉成 CRLF（否則 D01 把 `check-server.sh` 放到主機上執行會失敗）
+- ℹ️ **Flyway 的 migration 檔（`V1`～`V4`）裡的註解不能改**：Flyway 會比對檔案的 checksum，改一個字啟動就失敗。`V1` 裡「接金流（P01）時再加 ONLINE」這類舊註解就留著，實際的變更看 `V3`
+
+### 還沒做、需要你決定或準備的
+
+- 🔲 **README 還不是作品集的版本**：PLAN 最後的「README 要寫的內容」（架構圖、設計重點、併發與壓測數據、遇到的問題與解法）還沒寫。除了「線上網址、實際使用情況」要等上線，其他現在就可以寫
+- 🔲 **D04（HTTPS）、D05（備份）沒有像 D01／D03 一樣先準備好設定檔與操作指南**：Nginx 的 HTTPS 設定、certbot 步驟、備份與還原腳本都可以先寫好、在本機驗證，等有主機與網域再實際操作
+- 🔲 **退款之後沒有地方記錄**：到綠界後台退款後，訂單還是「已取消＋已付款」，後台的紅色提醒不會消失，分不出哪些已經退了。需要一個「標記已退款」的操作（把付款狀態改成 `REFUNDED`）
+- 🔲 **後台訂單列表看不出哪些訂單要退款**（P01 已記錄）：API 有回傳付款狀態，列表加一個標籤就可以
+- 🔲 **顧客看到「已取消＋已付款」時沒有說明**：訂單頁沒有告訴顧客款項會退回（文案要先和家人確認怎麼退、多久退）
+- 🔲 **`CLAUDE.md` 有幾處過時**（那是你給 AI 的規則，沒有擅自修改）：
+  - 「啟動本機資料庫：`docker compose up -d db`」→ 現在要 `db redis rabbitmq mailpit`
+  - 技術棧沒有 Redis、RabbitMQ
+  - 模組列表只寫 user、product、category、order，現在還有 shipping、dashboard、notification、timeout、payment、logistics、security、common
+- 🔲 其餘需要主機／網域／家人確認的項目，見最上面的「上線前一定要處理（D08 檢查清單）」
+

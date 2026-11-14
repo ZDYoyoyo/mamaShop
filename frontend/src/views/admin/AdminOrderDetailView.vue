@@ -175,6 +175,11 @@ function operatorText(history) {
       class="refund-alert"
     />
 
+    <!-- 待付款（線上付款，P01）：不能手動確認，說明原因，免得家人以為少了按鈕 -->
+    <p v-if="order.status === 'PENDING_PAYMENT'" class="muted pending-payment">
+      等待顧客線上付款：付款成功後會自動變成「備貨中」，逾時沒付款會自動取消，不需要手動確認。
+    </p>
+
     <!-- 操作：依目前狀態顯示；已完成、已取消、已退回沒有操作 -->
     <section v-if="actions.length" class="actions">
       <el-button

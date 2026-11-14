@@ -129,7 +129,8 @@ public class ShipmentService {
         }
         String subType = cvsMapService.subType(order.getCvsBrand());
         String merchantTradeNo = orderNo + String.format("%02d", shipmentRepository.countByOrderId(order.getId()) + 1);
-        // 貨到付款：超商代收貨款；線上付款：已經付過了
+        // 貨到付款：超商代收貨款；線上付款：已經付過了，不代收。
+        // （線上付款的訂單能到「備貨中」一定已付款：只有金流通知能把待付款改成備貨中，見 AdminOrderService#confirm）
         boolean collect = order.getPaymentMethod() == PaymentMethod.COD && order.getPaymentStatus() != PaymentStatus.PAID;
         String wholeDollars = amount.setScale(0).toPlainString();
 

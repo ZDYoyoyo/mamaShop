@@ -47,6 +47,10 @@ STATUS 欄位會顯示：
 | db | `pg_isready`（資料庫能不能連線） |
 | backend | 呼叫 `/api/actuator/health`（也會檢查資料庫連線） |
 | web | 打開首頁 |
+| redis | `redis-cli ping` |
+| rabbitmq | `rabbitmq-diagnostics ping` |
+
+> ℹ️ **redis、rabbitmq 掛掉時，backend 還是 `healthy`**（刻意的，見 NOTES 的 R01、M01）：它們不在後端的健康檢查裡，因為網站少了它們照樣能用——Redis 掛了改查資料庫、RabbitMQ 掛了只是通知信和自動處理（自動完成、逾時未付款取消）暫停。所以這兩個要**自己看 `ps` 的狀態**，外部監控（下面第 3 節）檢查的是網站，不會發現它們壞了。
 
 > ⚠️ **`unhealthy` 不會自動重新啟動容器**（Docker 的 `restart` 只在程式結束時重啟）。實測：資料庫停掉時後端變 `unhealthy`，資料庫恢復後後端**自己恢復成 `healthy`**，不用重啟。如果一直 `unhealthy`，看下面「出問題時怎麼查」。
 

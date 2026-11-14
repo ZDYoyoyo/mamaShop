@@ -1,8 +1,10 @@
 /**
  * 後台訂單操作的定義：每個狀態可以做哪些操作、按鈕文字、確認時的說明。
  *
- * 可以做哪些操作和後端的 OrderStatus.canTransitionTo 一致（B10）：
- *   待確認／待付款 → 確認、取消
+ * 可以做哪些操作和後端一致（B10 的 OrderStatus.canTransitionTo，加上 AdminOrderService 的限制）：
+ *   待確認         → 確認、取消
+ *   待付款         → 只能取消。線上付款（P01）的訂單要等金流通知付款成功才會自動進入備貨，
+ *                    不能手動確認（否則等於沒收到錢就出貨；後端也會擋）
  *   備貨中         → 出貨、取消
  *   已出貨         → 已送達、退回
  *   已送達         → 完成、退回
@@ -51,7 +53,7 @@ export const ORDER_ACTIONS = {
 }
 
 const ACTIONS_BY_STATUS = {
-  PENDING_PAYMENT: ['confirm', 'cancel'],
+  PENDING_PAYMENT: ['cancel'],
   PENDING_CONFIRM: ['confirm', 'cancel'],
   PROCESSING: ['ship', 'cancel'],
   SHIPPED: ['deliver', 'return'],

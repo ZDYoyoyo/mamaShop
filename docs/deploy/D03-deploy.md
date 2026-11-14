@@ -15,7 +15,7 @@
 
 | 檔案 | 用途 |
 |---|---|
-| `deploy/docker-compose.prod.yml` | 三個服務的設定 |
+| `deploy/docker-compose.prod.yml` | 五個服務的設定：web（Nginx）、backend、db、redis、rabbitmq |
 | `deploy/nginx/Dockerfile` | 建置前端＋Nginx 映像檔 |
 | `deploy/nginx/default.conf` | 路由、快取、上傳大小、轉發給後端 |
 | `deploy/nginx/security-headers.conf` | CSP 等安全 header |
@@ -125,6 +125,10 @@ nano deploy/.env
 至少要填：`SITE_URL`（先填 `http://主機IP`）、`DB_PASSWORD`、`JWT_SECRET`、`RABBITMQ_PASSWORD`、`ADMIN_EMAIL`、`ADMIN_PASSWORD`。
 寄信（`MAIL_*`）可以先空著：不會寄信、只記 log，選好寄信服務後再填（見 M01 的 NOTES）。存檔：Ctrl+O、Enter；離開：Ctrl+X。
 
+綠界金流（`ECPAY_*`，P01）與物流（`ECPAY_LOGISTICS_*`，P02、P03）**預設是關的**：結帳只有貨到付款、超商門市手動填、後台手動填物流單號，網站可以先這樣上線。
+和綠界簽約、拿到正式商店的資料後再填（每個值的說明在 `deploy/.env.example`，設計與注意事項在 NOTES 的 P01～P03），改完 `deploy/.env` 後執行 `docker compose -f deploy/docker-compose.prod.yml up -d`：Compose 發現環境變數變了，會重新建立後端容器，新設定才會生效。
+綠界要能從外面連到網站才能通知付款結果與物流狀態，所以**要先完成 D02（網域）、D04（HTTPS）再啟用**。
+
 > 這些值**只存在主機上**。把 `ADMIN_PASSWORD` 記在密碼管理器，第一次登入後台要用。
 
 ---
@@ -147,7 +151,7 @@ docker compose -f deploy/docker-compose.prod.yml up -d
 docker compose -f deploy/docker-compose.prod.yml ps
 ```
 
-三個都是 `Up (healthy)`（剛啟動時會是 `health: starting`，等一分鐘；健康檢查見 D07），**只有 web 有 `0.0.0.0:80->80/tcp`**。
+五個服務（web、backend、db、redis、rabbitmq）都是 `Up`，有健康檢查的會顯示 `(healthy)`（剛啟動時是 `health: starting`，等一分鐘；健康檢查見 D07），**只有 web 有 `0.0.0.0:80->80/tcp`**。
 
 看後端啟動 log：
 

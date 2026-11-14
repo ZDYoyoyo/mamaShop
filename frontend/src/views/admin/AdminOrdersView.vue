@@ -13,8 +13,22 @@ import { ORDER_STATUS, SHIPPING_METHOD_LABELS } from '@/utils/labels'
 
 const PAGE_SIZE = 20
 
-/** 上方的狀態標籤：依處理順序排列（待付款要接金流才會出現，P01 再加） */
-const STATUS_TABS = ['', 'PENDING_CONFIRM', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'COMPLETED', 'CANCELLED', 'RETURNED']
+/**
+ * 上方的狀態標籤：依處理順序排列。
+ * 「待付款」是線上付款（P01）還沒付的訂單：家人不用處理（付款成功會自動變成備貨中、逾時會自動取消），
+ * 所以排在需要處理的「待確認」「備貨中」後面
+ */
+const STATUS_TABS = [
+  '',
+  'PENDING_CONFIRM',
+  'PROCESSING',
+  'SHIPPED',
+  'DELIVERED',
+  'PENDING_PAYMENT',
+  'COMPLETED',
+  'CANCELLED',
+  'RETURNED',
+]
 
 const route = useRoute()
 const router = useRouter()
