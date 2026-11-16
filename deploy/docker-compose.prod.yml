@@ -12,7 +12,8 @@
 #   - redis：商品快取（R01）、防重複下單（R02）
 #   - rabbitmq：訂單通知信（M01）、延遲任務（M02 自動完成、P01 逾時未付款取消）、失敗佇列（M03）
 #   - 沒有 mailpit（本機的假寄信伺服器）：寄信用 MAIL_* 設定的真實寄信服務
-#   - 對外只開 web 的 80 port；資料庫、後端「完全不寫 ports」，只有 Docker 內部網路連得到
+#   - HTTPS（D04）：deploy/.env 設定 TLS_MODE=https 與 DOMAIN 後，web 改用 HTTPS 的設定；certbot 負責申請與續期憑證
+#   - 對外只開 web 的 80、443 port；資料庫、後端「完全不寫 ports」，只有 Docker 內部網路連得到
 #     （Docker 公開的 port 會繞過 ufw 防火牆，見 docs/deploy/D01-server.md）
 #   - 不載入測試資料、不開 API 文件
 
@@ -175,19 +176,49 @@ services:
       # 等後端健康檢查通過才啟動 Nginx：剛部署時比較不會看到「伺服器暫時無法使用」
       backend:
         condition: service_healthy
+    environment:
+      # HTTPS（D04）：TLS_MODE=https 時，Nginx 啟動會用 /etc/nginx/templates-https 的範本產生 HTTPS 的設定；
+      # 預設 http：那個資料夾不存在（templates-http），什麼都不做，用映像檔裡只有 HTTP 的設定
+      NGINX_ENVSUBST_TEMPLATE_DIR: /etc/nginx/templates-${TLS_MODE:-http}
+      # 範本裡只替換 ${DOMAIN}，不要動到 Nginx 自己的變數
+      NGINX_ENVSUBST_FILTER: DOMAIN
+      DOMAIN: ${DOMAIN:-}
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/ || exit 1"]
+      # /nginx-health 在 80 port 固定回 200（HTTPS 模式下首頁會轉址到 https://網域，容器裡不一定連得到）
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/nginx-health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
     ports:
-      # 對外只開這一個 port。HTTP_PORT 預設 80；本機測試時可以改成其他 port
+      # 對外只開這兩個 port。本機測試時可以用 HTTP_PORT／HTTPS_PORT 改成其他 port。
+      # 443 在 HTTP 模式下容器裡沒有程式在聽，連過來會直接被拒絕
       - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
     volumes:
       # 商品圖片直接由 Nginx 提供（比經過後端快）。:ro 唯讀：Nginx 只讀不寫
       - uploads-data:/srv/uploads:ro
+      # HTTPS（D04）：憑證（certbot 寫入、Nginx 唯讀）與網域驗證用的資料夾
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot-www:/var/www/certbot:ro
+
+  # Let's Encrypt 的用戶端（D04）：申請、續期憑證。
+  # profiles：平常 `up -d` 不會啟動它，只有 `docker compose run --rm certbot ...` 時才跑一次、跑完就刪掉容器。
+  # 用法見 docs/deploy/D04-https.md 與 deploy/scripts/renew-cert.sh
+  certbot:
+    <<: *logging
+    image: certbot/certbot:v4.2.0
+    profiles: ["certbot"]
+    volumes:
+      # 憑證與帳號資料：certbot 可以寫
+      - letsencrypt:/etc/letsencrypt
+      # 驗證檔放這裡，web 從同一個 volume 讀出來給 Let's Encrypt 看
+      - certbot-www:/var/www/certbot
 
 volumes:
   db-data:
   uploads-data:
   rabbitmq-data:
+  # HTTPS 憑證與私鑰（D04）。⚠️ 刪掉要重新申請；Let's Encrypt 同一個網域一週只能申請 5 次
+  letsencrypt:
+  # Let's Encrypt 網域驗證用的暫存檔，刪掉沒關係
+  certbot-www:

@@ -173,3 +173,14 @@ jobs:
       # 設定裡的 backend 主機名稱在這裡不存在，用 --add-host 給一個假的位址
       - name: 檢查 Nginx 設定
         run: docker run --rm --add-host backend:127.0.0.1 mamashop-web nginx -t
+
+      # HTTPS 模式（D04）的設定是啟動時才由範本產生的，上面那一步檢查不到。
+      # 用一張臨時的自簽憑證放在 Let's Encrypt 的路徑，讓 Nginx 用 HTTPS 模式產生設定並檢查語法
+      - name: 檢查 Nginx 設定（HTTPS 模式）
+        run: |
+          mkdir -p /tmp/le/live/ci.example.com
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=ci.example.com" \
+            -keyout /tmp/le/live/ci.example.com/privkey.pem -out /tmp/le/live/ci.example.com/fullchain.pem
+          docker run --rm --add-host backend:127.0.0.1 \
+            -e NGINX_ENVSUBST_TEMPLATE_DIR=/etc/nginx/templates-https -e NGINX_ENVSUBST_FILTER=DOMAIN -e DOMAIN=ci.example.com \
+            -v /tmp/le:/etc/letsencrypt:ro mamashop-web nginx -t

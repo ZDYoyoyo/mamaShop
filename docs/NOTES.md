@@ -1348,7 +1348,7 @@ P 系列做完後整個專案檢查一次：PLAN 的完成狀況、後來的任�
 ### 還沒做、需要你決定或準備的
 
 - ✅（已寫，線上網址與使用情況等上線後補；內容請自己讀過、改成你的說法）**README 還不是作品集的版本**：PLAN 最後的「README 要寫的內容」（架構圖、設計重點、併發與壓測數據、遇到的問題與解法）還沒寫。除了「線上網址、實際使用情況」要等上線，其他現在就可以寫
-- 🔲 **D04（HTTPS）、D05（備份）沒有像 D01／D03 一樣先準備好設定檔與操作指南**：Nginx 的 HTTPS 設定、certbot 步驟、備份與還原腳本都可以先寫好、在本機驗證，等有主機與網域再實際操作
+- （D04 已準備好，見下方「D04 HTTPS」；D05 還沒）🔲 **D04（HTTPS）、D05（備份）沒有像 D01／D03 一樣先準備好設定檔與操作指南**：Nginx 的 HTTPS 設定、certbot 步驟、備份與還原腳本都可以先寫好、在本機驗證，等有主機與網域再實際操作
 - ✅（見下方「標記已退款」）**退款之後沒有地方記錄**：到綠界後台退款後，訂單還是「已取消＋已付款」，後台的紅色提醒不會消失，分不出哪些已經退了。需要一個「標記已退款」的操作（把付款狀態改成 `REFUNDED`）
 - ✅（見下方「標記已退款」）**後台訂單列表看不出哪些訂單要退款**（P01 已記錄）：API 有回傳付款狀態，列表加一個標籤就可以
 - 🔲 **顧客看到「已取消＋已付款」時沒有說明**：訂單頁沒有告訴顧客款項會退回（文案要先和家人確認怎麼退、多久退）
@@ -1395,4 +1395,57 @@ P 系列做完後整個專案檢查一次：PLAN 的完成狀況、後來的任�
 - ℹ️ `AccessControlTest`：新的 API 只有管理員能用
 - ℹ️ 前端：詳情頁按「標記已退款」後提醒消失；列表的「需退款」標籤
 - ℹ️ 後端 427（1 個略過）、前端 213 個測試全部通過
+
+## D04 HTTPS（設定檔與指南已完成，待實際申請憑證）
+
+> 和 D01、D03 一樣，真的申請憑證要等主機與網域。這個任務的產出是 **HTTPS 的設定、續期腳本、操作指南**，並在本機用自簽憑證把 HTTPS 模式實際跑過。
+
+| 檔案 | 用途 |
+|---|---|
+| `deploy/nginx/https.conf.template` | HTTPS 的設定：80 轉址、443 網站、用 IP 連 443 直接拒絕 |
+| `deploy/nginx/site.conf` | 從原本的 `default.conf` 抽出來的網站本體，HTTP／HTTPS 共用 |
+| `deploy/nginx/acme-and-health.conf` | Let's Encrypt 驗證路徑、健康檢查路徑 |
+| `deploy/docker-compose.prod.yml` | `certbot` 服務（平常不啟動）、兩個 volume、443 port、`TLS_MODE`／`DOMAIN` |
+| `deploy/scripts/renew-cert.sh` | 續期＋重新載入 Nginx，給 cron 每天執行 |
+| `docs/deploy/D04-https.md` | 操作指南（每個指令都有說明） |
+
+### 設計
+
+- ℹ️ **用 `deploy/.env` 的 `TLS_MODE` 切換，不是兩份 compose 檔**：預設 `http`，D03 部署完不用做任何事就能運作；申請到憑證後改成 `https`
+  - 做法：Nginx 官方映像檔啟動時會把範本資料夾裡的檔案做變數替換後放進設定資料夾。`TLS_MODE=https` 時指到 HTTPS 的範本，產生的設定蓋掉 HTTP 的版本；`http` 時指到不存在的資料夾，什麼都不做
+  - 只替換 `${DOMAIN}`（`NGINX_ENVSUBST_FILTER`），不會動到 Nginx 自己的 `$host`、`$uri`
+- ℹ️ **網站本體抽成共用的 `site.conf`**：HTTP 和 HTTPS 的行為保證一樣，之後改路由只改一個地方
+- ℹ️ **certbot 用容器跑、webroot 驗證**：
+  - 主機不用另外安裝 certbot；憑證放在 Docker volume，web 唯讀掛載
+  - webroot：驗證檔由正在運作的 Nginx 提供，申請和續期都**不用停網站**
+  - `profiles: ["certbot"]`：平常 `up -d` 不會啟動，只有 `run --rm certbot ...` 才跑
+- ℹ️ **順序是「先 HTTP 模式申請憑證，再切 HTTPS」**：Nginx 找不到憑證檔會啟動失敗。本機實測過這個情況：web 一直 Restarting、log 是 `cannot load certificate`，指南的常見問題有寫
+- ℹ️ **80 port 轉址固定轉到 `${DOMAIN}`**，不用請求帶來的 Host：別人亂填 Host 也不會被轉到別的網站（實測）
+- ℹ️ **用 IP 或其他網域連 443 直接拒絕**（`ssl_reject_handshake`），不會把憑證給掃描的人看
+- ℹ️ **HSTS 先設 1 天**：瀏覽器記住後，HTTPS 壞掉網站就打不開。穩定後再改 1 年（指南第 8 節）。沒有加 `includeSubDomains`、`preload`（會影響之後的子網域，而且很難撤回）
+  - 值用 `map $scheme` 決定：HTTP 的回應是空字串，Nginx 不會送出空的 header，所以 HTTP 模式不受影響
+- ⚠️ **實測抓到：`/api` 的回應有兩份 HSTS**。後端收到 `X-Forwarded-Proto: https` 後，Spring Security 會自己送一份（1 年、含子網域），和 Nginx 的衝突。在 `/api` 用 `proxy_hide_header` 隱藏後端的那份
+- ℹ️ **健康檢查改成 `/nginx-health`**：HTTPS 模式下 80 port 的首頁會轉址到 `https://網域`，容器裡的檢查程式不一定連得到
+- ℹ️ **續期用 cron 每天跑**：`certbot renew` 只有剩不到 30 天才真的續期，每天檢查等於有很多次重試機會。續期後 `nginx -s reload`（Nginx 把憑證讀在記憶體裡，不 reload 還是舊的）
+- ℹ️ CI 多一步：用臨時的自簽憑證檢查 HTTPS 模式的 Nginx 設定（範本是啟動時才產生的，原本的 `nginx -t` 檢查不到）
+
+### 刻意沒做／之後要注意
+
+- 🔲 **真的向 Let's Encrypt 申請還沒做過**（需要網域）。`certbot certonly` 那行指令是照文件寫的，沒有實際跑過；指南第 3 步先用 `--dry-run`
+- 🔲 **切成 HTTPS 時 `SITE_URL` 要一起改**，否則 CORS 會擋掉登入等 API（指南有寫，常見問題也有）
+- 🔲 HSTS 改成 1 年要改兩個檔案（`default.conf`、`https.conf.template`）再重新建置
+- 🔲 沒有 `www.` 轉址：只申請一個網域。需要的話加 `-d www.網域` 並在 `server_name` 加上
+- 🔲 憑證到期的提醒靠 Let's Encrypt 的 Email 和 D07 的外部監控，沒有另外寫
+- ⚠️ 憑證在 `letsencrypt` volume 裡：`down -v` 會刪掉，要重新申請（每週 5 次的限制）。D05 的備份可以不含它（重新申請即可）
+
+### 驗證（本機，正式環境的 compose，自簽憑證代替 Let's Encrypt）
+
+- ℹ️ HTTP 模式（預設）：網站正常、沒有 HSTS、驗證路徑讀得到放進 volume 的檔案、不存在的驗證檔回 404（不是首頁）
+- ℹ️ HTTPS 模式：
+  - `http://` 任何網址 → 301 到 `https://網域/同一個路徑`；亂填 Host 也轉到正確的網域
+  - 80 port 的驗證路徑、`/nginx-health` 不轉址
+  - `https://` 首頁 200、HTTP/2、API 正常、HSTS 只有一份
+  - 用 IP 連 443、用 TLS 1.1 連線都被拒絕；TLS 1.2 可以
+- ℹ️ `renew-cert.sh` 實際執行：certbot 容器啟動、Nginx 設定檢查與 reload 都成功，reload 後網站正常
+- ℹ️ 這個環境的 Docker 建置不了前端（沙盒的網路限制），驗證時是把新的設定檔套在既有的 web 映像檔上；**完整的 `docker build` 由 CI 的「建置正式環境映像檔」驗證**
 

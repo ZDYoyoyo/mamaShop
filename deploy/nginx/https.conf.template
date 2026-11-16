@@ -1,0 +1,65 @@
+# 正式環境的 Nginx 設定：HTTPS 的版本（D04）。
+#
+# deploy/.env 設定 TLS_MODE=https 時，容器啟動會把這個範本裡的 ${DOMAIN} 換成 deploy/.env 的網域，
+# 產生 /etc/nginx/conf.d/default.conf（蓋掉只有 HTTP 的版本）。
+# 這是 Nginx 官方映像檔內建的功能（/docker-entrypoint.d/20-envsubst-on-templates.sh）；
+# 只會替換 ${DOMAIN}（NGINX_ENVSUBST_FILTER），Nginx 自己的變數（$host、$uri…）不受影響。
+#
+# 前提：憑證已經申請好，放在 letsencrypt volume 裡（docs/deploy/D04-https.md）。
+# 憑證檔不存在的話 Nginx 會啟動失敗，所以要先用 HTTP 模式申請到憑證，再切換成 HTTPS 模式。
+
+server_tokens off;
+
+gzip on;
+gzip_comp_level 5;
+gzip_min_length 1024;
+gzip_types text/css application/javascript application/json image/svg+xml;
+gzip_vary on;
+
+# HSTS：說明見 default.conf（HTTP 的版本）。要調整 max-age 時兩個檔案一起改
+map $scheme $hsts_header {
+    https   "max-age=86400";
+    default "";
+}
+
+# ===== 80 port：只做兩件事——憑證驗證、其他全部轉到 HTTPS =====
+server {
+    listen 80;
+    server_name _;
+
+    include /etc/nginx/snippets/acme-and-health.conf;
+
+    location / {
+        # 301：永久轉址。固定轉到 ${DOMAIN}，不用請求帶來的 Host（別人可以亂填 Host 讓我們轉到奇怪的網址）
+        return 301 https://${DOMAIN}$request_uri;
+    }
+}
+
+# ===== 443 port：網站本體 =====
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${DOMAIN};
+
+    # Let's Encrypt 的憑證（certbot 放在 live/網域/，是指向最新一份的捷徑，續期後路徑不變）
+    #   fullchain.pem：我們的憑證＋中繼憑證（瀏覽器要靠中繼憑證一路驗證到它信任的根憑證）
+    #   privkey.pem：私鑰，外洩的話別人可以假冒這個網站
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+
+    # 只接受 TLS 1.2、1.3（1.0、1.1 有已知弱點，現在的瀏覽器也都不用了）
+    ssl_protocols TLSv1.2 TLSv1.3;
+    # 同一個訪客短時間內再連線時不用重新做完整的交握（比較快）；10MB 大約可以記 4 萬個連線
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    include /etc/nginx/snippets/site.conf;
+}
+
+# 用 IP 或其他網域連到 443：直接關閉連線，不提供網站
+# （ssl_reject_handshake：連 TLS 交握都不做，不會把我們的憑證給對方看）
+server {
+    listen 443 ssl default_server;
+    ssl_reject_handshake on;
+}
