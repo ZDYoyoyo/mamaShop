@@ -57,9 +57,31 @@ function logout() {
     <!-- 依網址顯示對應的頁面（router/index.js） -->
     <RouterView />
   </main>
+
+  <!-- 頁尾：每一頁都看得到隱私權政策的連結 -->
+  <footer class="site-footer">
+    <RouterLink :to="{ name: 'privacy' }">隱私權政策</RouterLink>
+  </footer>
 </template>
 
 <style scoped>
+.site-footer {
+  margin-top: 32px;
+  padding: 16px;
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.site-footer a {
+  /* 手機上好點：可點範圍至少 44px 高（和導覽列一樣的原則） */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--color-muted);
+}
+
 .site-header {
   position: sticky;
   top: 0;
