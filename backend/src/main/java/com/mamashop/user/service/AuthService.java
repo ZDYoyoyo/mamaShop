@@ -28,6 +28,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final LoginAttemptService loginAttempts;
 
     /**
      * 帳號不存在時，也拿這個假雜湊跑一次比對，讓回應時間和「密碼錯誤」差不多，
@@ -35,7 +36,9 @@ public class AuthService {
      */
     private final String dummyPasswordHash;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService) {
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService,
+                       LoginAttemptService loginAttempts) {
+        this.loginAttempts = loginAttempts;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
@@ -66,26 +69,43 @@ public class AuthService {
         return UserResponse.from(user);
     }
 
+    /**
+     * @param clientIp 使用者的 IP（登入失敗次數限制用，見 {@link LoginAttemptService}）
+     */
     @Transactional(readOnly = true)
-    public LoginResponse login(LoginRequest request) {
-        if (request.password().getBytes(StandardCharsets.UTF_8).length > BCRYPT_MAX_BYTES) {
-            throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
+    public LoginResponse login(LoginRequest request, String clientIp) {
+        String email = normalizeEmail(request.email());
+        // 失敗太多次：直接擋，連密碼對不對都不檢查（也不告訴對方）
+        if (loginAttempts.isBlocked(email, clientIp)) {
+            throw new BusinessException(ErrorCode.TOO_MANY_LOGIN_ATTEMPTS,
+                    "登入失敗次數過多，請 " + loginAttempts.windowMinutes() + " 分鐘後再試");
         }
 
-        Optional<User> found = userRepository.findByEmail(normalizeEmail(request.email()));
+        if (request.password().getBytes(StandardCharsets.UTF_8).length > BCRYPT_MAX_BYTES) {
+            throw loginFailed(email, clientIp);
+        }
+
+        Optional<User> found = userRepository.findByEmail(email);
         if (found.isEmpty()) {
             passwordEncoder.matches(request.password(), dummyPasswordHash);
-            throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
+            throw loginFailed(email, clientIp);
         }
 
         User user = found.get();
         // 停用的帳號也回同一個訊息，不透露帳號狀態
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash()) || !user.isEnabled()) {
-            throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
+            throw loginFailed(email, clientIp);
         }
+        loginAttempts.recordSuccess(email, clientIp);
 
         String token = jwtService.generateToken(user);
         return new LoginResponse(token, "Bearer", jwtService.getExpiration().toSeconds(), UserResponse.from(user));
+    }
+
+    /** 記一次失敗，回傳要丟出的例外（不管是哪一種失敗，訊息都一樣） */
+    private BusinessException loginFailed(String email, String clientIp) {
+        loginAttempts.recordFailure(email, clientIp);
+        return new BusinessException(ErrorCode.INVALID_CREDENTIALS);
     }
 
     /** Email 不分大小寫：統一去除前後空白並轉小寫後再存、再查 */
