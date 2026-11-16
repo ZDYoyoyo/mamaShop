@@ -21,6 +21,9 @@ RUN npm run build
 # ===== 第 2 階段：Nginx =====
 FROM nginx:1.27-alpine
 
+# HTTP 的設定（預設）。TLS_MODE=https 時，啟動時會用下面的範本產生 HTTPS 的設定蓋掉它（D04）
 COPY deploy/nginx/default.conf /etc/nginx/conf.d/default.conf
-COPY deploy/nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
+COPY deploy/nginx/https.conf.template /etc/nginx/templates-https/default.conf.template
+# 兩種模式共用的片段
+COPY deploy/nginx/site.conf deploy/nginx/security-headers.conf deploy/nginx/acme-and-health.conf /etc/nginx/snippets/
 COPY --from=build /app/dist /usr/share/nginx/html

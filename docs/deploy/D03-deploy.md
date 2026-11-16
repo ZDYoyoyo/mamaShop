@@ -17,7 +17,7 @@
 |---|---|
 | `deploy/docker-compose.prod.yml` | 五個服務的設定：web（Nginx）、backend、db、redis、rabbitmq |
 | `deploy/nginx/Dockerfile` | 建置前端＋Nginx 映像檔 |
-| `deploy/nginx/default.conf` | 路由、快取、上傳大小、轉發給後端 |
+| `deploy/nginx/default.conf`、`site.conf` | 路由、快取、上傳大小、轉發給後端（`site.conf` 是網站本體，HTTP 與 D04 的 HTTPS 設定共用） |
 | `deploy/nginx/security-headers.conf` | CSP 等安全 header |
 | `deploy/.env.example` | 設定範本；在主機上複製成 `deploy/.env`（不進版控） |
 | `.dockerignore`（根目錄） | 建置前端時只把 `frontend/`、`deploy/nginx/` 送進 Docker |
