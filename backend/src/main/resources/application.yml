@@ -16,7 +16,8 @@ spring:
   datasource:
     # 非機密的連線資訊給本機預設值；帳號密碼不給預設值。
     # 沒設定時 Spring 會把 "${DB_USERNAME}" 字面當帳號，啟動時連線失敗，錯誤訊息裡看得到這串字
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:mamashop}
+    # DB_URL_PARAMS：連線網址後面的參數，預設沒有。雲端資料庫（例如 Neon）要求加密連線時設成 ?sslmode=require
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:mamashop}${DB_URL_PARAMS:}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
 

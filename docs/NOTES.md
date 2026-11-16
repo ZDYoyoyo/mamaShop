@@ -1576,3 +1576,45 @@ P 系列做完後整個專案檢查一次：PLAN 的完成狀況、後來的任�
 - ℹ️ 手機畫面（Playwright，iPhone 13）：沒有橫向捲動，頁尾連結與註冊頁的同意文字正常
 - ℹ️ 前端 216 個測試全部通過
 
+## 展示站（Vercel＋Render＋Neon，設定檔與指南已完成，待實際部署）
+
+> 給面試官看的免費展示站。正式站仍然是 D01～D08（自己的主機）。**沒有另開分支**：同一份 main，差別只有設定。
+
+| 檔案 | 用途 |
+|---|---|
+| `frontend/vercel.json` | `/api`、`/uploads` 轉給 Render；前端路由的 fallback；安全 header |
+| `render.yaml` | Render 的服務與環境變數 |
+| `docs/deploy/DEMO-vercel-render-neon.md` | 操作指南 |
+
+### 設計
+
+- ℹ️ **不開長期分支**：兩條分支會越差越遠，每個修正都要做兩次。這個專案的 Redis、RabbitMQ、綠界、寄信本來就是「沒設定就關閉、網站照常運作」，所以展示站只需要一組不同的環境變數
+- ℹ️ **程式只改了一行**：`application.yml` 的資料庫網址後面加 `${DB_URL_PARAMS:}`（預設空的）。Neon 要求加密連線，展示站設成 `?sslmode=require`；正式站不受影響
+- ℹ️ **沒有 Redis、RabbitMQ 時要關哪些東西**（都是環境變數，寫在 `render.yaml`）：
+  - `CACHE_TYPE=none`、`LOGIN_LIMIT_ENABLED=false`
+  - `NOTIFICATION_ENABLED=false`、`ORDER_TIMEOUT_ENABLED=false`
+  - `SPRING_RABBITMQ_LISTENER_SIMPLE_AUTO_STARTUP=false`：不關的話消費者會一直重試連線，log 被洗版
+  - 防重複下單（R02）沒有開關：連不到 Redis 就放行，每次多等約 0.5 秒
+- ℹ️ **JVM 記憶體要自己設上限**：Render 免費方案只有 512MB，Dockerfile 的 `MaxRAMPercentage=75` 會讓 heap 用到 384MB，加上 metaspace 等會超過。用 `JAVA_TOOL_OPTIONS` 設 `-Xmx256m`（明確的 `-Xmx` 優先於百分比），不改 Dockerfile（正式站不受影響）
+- ℹ️ **連線池配合 Neon 的自動暫停**：不保留閒置連線、不定期 ping（`minimum-idle=0`、`keepalive-time=0`），沒人用的時候 Neon 才會暫停、不耗運算時數
+- ℹ️ **前端用 Vercel 的 rewrite 轉發 API**，不是讓瀏覽器直接連 Render：對瀏覽器來說還是同一個網站（和正式站經過 Nginx 一樣），token、CSP 的設定都不用改
+- ℹ️ 圖片、通知信、延遲任務照你的決定用「簡單的做法」：圖片會在 Render 重啟時消失；不接 RabbitMQ
+
+### 本機驗證（用 Docker 限制成 512MB、0.1 CPU，Redis 與 RabbitMQ 停掉，環境變數同 `render.yaml`）
+
+- ℹ️ 啟動成功、沒有錯誤；穩定後記憶體約 300MB，沒有被強制結束
+- ⚠️ **啟動要 150～170 秒**（0.1 CPU）。試過延遲初始化（`spring.main.lazy-initialization`），只快 10 秒，沒有採用
+  - Vercel 轉發最多等 120 秒：休眠後第一次打開會失敗，等一下重新整理才正常。指南最上面有寫
+- ℹ️ 註冊、登入、下單、後台訂單列表都正常；log 只有「Redis 無法使用，這次下單不檢查重複」的警告（預期的）
+- ℹ️ 來自前端網域的 CORS 預檢通過
+- ℹ️ `DB_URL_PARAMS` 有帶進連線網址（用一個無害的參數測；本機的 PostgreSQL 沒有開 SSL，`sslmode=require` 本身沒辦法在本機測）
+
+### 還沒驗證／之後要注意
+
+- 🔲 **三個平台都沒有實際部署過**（需要你的帳號）。`render.yaml` 的欄位、`vercel.json` 的 rewrite 是照官方文件寫的；指南裡有 Blueprint 失敗時改用手動建立的步驟
+- 🔲 `frontend/vercel.json` 裡的後端網址是預設的 `mamashop-demo-backend.onrender.com`：Render 給的網址不一樣的話要改這個檔案（指南第 3 步）
+- 🔲 **展示用帳號**：公開管理員帳號的話任何人都能改資料、改密碼。指南建議公開顧客帳號就好
+- 🔲 展示站沒有備份（資料是示範用的，壞了重建）
+- 🔲 之後如果要讓展示站也有圖片：把圖片存到雲端儲存空間（要改 `ImageStorageService`，是一個新功能）
+- 🔲 之後新增「一定需要 Redis 或 RabbitMQ 才能運作」的功能時，要記得展示站沒有這兩個
+

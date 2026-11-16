@@ -5,6 +5,8 @@
 > 🚧 **目前狀態**：功能開發完成，尚未部署上線（主機、網域、HTTPS、備份還沒做）。完整的任務清單與進度見 [`docs/PLAN.md`](docs/PLAN.md)。
 >
 > 線上網址、展示用帳號、實際使用情況：上線後補上。
+>
+> 部署方式有兩種，用的是同一份程式：**正式站**跑在自己的 Linux 主機（[`docs/deploy/`](docs/deploy/) 的 D01～D08）；**免費的展示站**用 Vercel＋Render＋Neon（[操作指南與限制](docs/deploy/DEMO-vercel-render-neon.md)）。
 
 ## 功能
 

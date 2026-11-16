@@ -1,0 +1,97 @@
+# Render 的 Blueprint：展示站的後端（docs/deploy/DEMO-vercel-render-neon.md）。
+# 正式站不用這個檔案（正式站是 deploy/docker-compose.prod.yml，跑在自己的主機上）。
+#
+# 在 Render 用「New → Blueprint」選這個 repo，Render 會照這個檔案建立服務；
+# 標 sync: false 的值不放在這裡（機密或每個人不同），建立時 Render 會要你輸入。
+#
+# 展示站和正式站是「同一份程式」，差別只有這裡的環境變數：
+#   - 沒有 Redis、RabbitMQ：商品快取、通知信、延遲任務（自動完成、逾時取消）、登入次數限制都關掉
+#   - 沒有綠界：只有貨到付款、超商門市手動填
+#   - APP_PROFILE=dev：載入示範商品
+#   - 免費方案 512MB 記憶體、0.1 CPU：JVM 的記憶體要自己設上限
+services:
+  - type: web
+    name: mamashop-demo-backend
+    runtime: docker
+    plan: free
+    # 離台灣最近的區域；Neon 的資料庫也選新加坡，後端和資料庫才不會隔一個太平洋
+    region: singapore
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    # Render 用這個網址判斷服務啟動好了沒（D07 的健康檢查）
+    healthCheckPath: /api/actuator/health
+    envVars:
+      # ===== 建立時要輸入的值（sync: false）=====
+      # Neon 的連線資料（Neon 後台 → Connect；用「沒有 -pooler」的主機名稱）
+      - key: DB_HOST
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      # 前端的網址（Vercel 給的，例如 https://mamashop-demo.vercel.app，結尾不要加 /）
+      - key: SITE_URL
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      # 展示用的管理員帳號（不要用正式站的帳號密碼）
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+
+      # ===== 固定的值 =====
+      # JWT 簽章密鑰：讓 Render 產生一個隨機值
+      - key: JWT_SECRET
+        generateValue: true
+      # Neon 要求加密連線
+      - key: DB_URL_PARAMS
+        value: "?sslmode=require"
+      - key: DB_PORT
+        value: "5432"
+      # Render 把外面的請求轉到容器的這個 port
+      - key: SERVER_PORT
+        value: "10000"
+      # 載入示範商品（db/testdata）
+      - key: APP_PROFILE
+        value: dev
+      # 前面有 Render 和 Vercel 兩層代理：照它們轉來的 header 判斷原本的網址與 IP
+      - key: SERVER_FORWARD_HEADERS_STRATEGY
+        value: native
+      # 記憶體只有 512MB：heap 最多 256MB、metaspace 最多 160MB，其餘留給執行緒與 JVM 本身。
+      # （Dockerfile 的 MaxRAMPercentage=75 會讓 heap 用到 384MB，加上其他部分超過 512MB 會被強制結束；
+      #   明確的 -Xmx 優先於百分比。）SerialGC、TieredStopAtLevel=1：小機器上比較省記憶體與 CPU。
+      # 本機用同樣的限制實測：穩定後約 300MB
+      - key: JAVA_TOOL_OPTIONS
+        value: "-Xmx256m -Xss512k -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:MaxMetaspaceSize=160m"
+
+      # ----- 沒有 Redis -----
+      - key: CACHE_TYPE
+        value: none
+      - key: LOGIN_LIMIT_ENABLED
+        value: "false"
+      # 防重複下單（R02）還是會去連 Redis，連不到就放行（每次多等約 0.5 秒的逾時）
+      - key: REDIS_HOST
+        value: 127.0.0.1
+
+      # ----- 沒有 RabbitMQ -----
+      - key: NOTIFICATION_ENABLED
+        value: "false"
+      - key: ORDER_TIMEOUT_ENABLED
+        value: "false"
+      # 不啟動消費者：否則會一直重試連線、log 被錯誤訊息洗版
+      - key: SPRING_RABBITMQ_LISTENER_SIMPLE_AUTO_STARTUP
+        value: "false"
+
+      # ----- 資料庫連線池：配合 Neon 閒置 5 分鐘自動暫停 -----
+      # 不保留閒置連線、不定期 ping：沒人用的時候讓 Neon 暫停，才不會把免費的運算時數用完
+      - key: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+        value: "5"
+      - key: SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE
+        value: "0"
+      - key: SPRING_DATASOURCE_HIKARI_KEEPALIVE_TIME
+        value: "0"
+      - key: SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT
+        value: "60000"
