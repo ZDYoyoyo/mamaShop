@@ -30,6 +30,7 @@ src/
 │   ├── payments.js   # 線上付款（P01）：付款設定、前往綠界付款頁
 │   ├── logistics.js  # 超商電子地圖（P02）：物流設定、前往綠界電子地圖
 │   └── admin/        # 後台 API（dashboard、orders（含綠界物流單，P03）、products、categories、shipping、accounts）
+├── config/shop.js    # 商店名稱、負責人、聯絡方式（隱私權政策頁用；上線前要改成真實資料）
 ├── stores/
 │   ├── auth.js       # 登入狀態（token、會員資料，存在 localStorage）
 │   └── cart.js       # 購物車（存在 localStorage）

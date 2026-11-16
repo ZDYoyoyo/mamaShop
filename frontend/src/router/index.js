@@ -65,6 +65,12 @@ export const routes = [
     meta: { requiresAuth: true },
   },
   {
+    // 隱私權政策（D08）：不用登入就能看
+    path: '/privacy',
+    name: 'privacy',
+    component: () => import('@/views/PrivacyView.vue'),
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('@/views/LoginView.vue'),

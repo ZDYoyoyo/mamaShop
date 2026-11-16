@@ -85,6 +85,10 @@ async function submit() {
       <el-button type="primary" size="large" native-type="submit" :loading="submitting" class="submit">
         註冊
       </el-button>
+      <p class="consent">
+        註冊即表示您已閱讀並同意
+        <RouterLink :to="{ name: 'privacy' }" target="_blank">隱私權政策</RouterLink>
+      </p>
     </el-form>
 
     <p class="switch">
@@ -124,5 +128,11 @@ h1 {
 .switch {
   text-align: center;
   color: var(--color-muted);
+}
+.consent {
+  margin: 12px 0 0;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  text-align: center;
 }
 </style>
