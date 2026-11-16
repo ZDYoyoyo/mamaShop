@@ -12,7 +12,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 延遲任務：TTL＋死信佇列（M02）。
+ * 延遲任務：TTL＋死信佇列（M02）。目前有兩種，各用一組佇列（下面的圖以第一種為例，第二種結構完全一樣）：
+ * <ol>
+ *   <li>宅配「已送達」N 天後自動完成（M02）：mamashop.order-auto-complete(.wait)</li>
+ *   <li>線上付款的訂單 N 分鐘沒付款自動取消（P01）：mamashop.order-payment-timeout(.wait)</li>
+ * </ol>
+ * 處理失敗（重試後還是失敗）的訊息會進各自的 .failed 佇列（M03，見 MessagingFailureConfig）。
  *
  * <pre>
  *  送達時 ──訊息（expiration = 7 天）──▶ 等待佇列 wait（沒有消費者，訊息就放著）
@@ -32,7 +37,7 @@ import org.springframework.context.annotation.Configuration;
  *
  * <p>⚠️ RabbitMQ 只檢查<b>佇列最前面</b>那則訊息有沒有過期。同一個佇列裡的訊息延遲時間都一樣
  * （先送達的先到期）就沒問題；如果把設定從 7 天改短，舊的 7 天訊息會擋住後面的短訊息，
- * 要等它到期後面的才會一起出來。所以一種延遲時間用一個等待佇列（之後的「未付款自動取消」另外建一組）。
+ * 要等它到期後面的才會一起出來。所以一種延遲時間用一個等待佇列：7 天的自動完成和 30 分鐘的未付款取消不能共用。
  */
 @Configuration
 @EnableConfigurationProperties(OrderTimeoutProperties.class)

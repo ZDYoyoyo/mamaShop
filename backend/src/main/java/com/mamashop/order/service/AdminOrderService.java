@@ -29,9 +29,20 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 後台訂單管理（B10）。
+ * 訂單狀態的所有「非顧客」操作：管理員在後台按的（B10），以及系統自動做的（M02、P01、P03）。
  *
- * <h2>每個操作都做三件事</h2>
+ * <h2>這個類別有兩種呼叫者，防止互相覆蓋的方式不同</h2>
+ * <ul>
+ *   <li><b>管理員（後台畫面）</b>：confirm、ship、deliver、complete、cancel、markReturned。
+ *       用<b>樂觀鎖</b>：比對畫面上的版本號＋@Version。衝突時回 409，請人重新整理後再決定</li>
+ *   <li><b>系統（沒有人在看畫面）</b>：onlinePaymentReceived（金流通知，P01）、autoCancelUnpaid（逾時未付款，P01）、
+ *       logisticsStatusChanged（物流通知，P03）、autoComplete（送達 N 天，M02）。
+ *       用<b>悲觀鎖</b>（SELECT ... FOR UPDATE；autoComplete 例外，見該方法）：後到的等前一個做完，
+ *       再依<b>最新狀態</b>決定要不要做。沒有人可以「看到 409 再按一次」，所以不能靠失敗來解決。
+ *       狀態紀錄的操作者是 NULL（畫面顯示「系統」）</li>
+ * </ul>
+ *
+ * <h2>管理員的每個操作都做三件事</h2>
  * <ol>
  *   <li><b>比對版本號</b>：管理員畫面上的版本 ≠ 資料庫的版本 → 409（有人在這段時間改過訂單）</li>
  *   <li><b>經過狀態機</b>：{@link Order#transitionTo} 檢查是否允許，並記錄時間</li>
@@ -92,10 +103,22 @@ public class AdminOrderService {
 
     // ===== 操作 =====
 
-    /** 確認訂單（待確認／待付款 → 備貨中）。例如家人電話確認過顧客 */
+    /**
+     * 確認訂單（待確認 → 備貨中）。例如家人電話確認過顧客。
+     *
+     * <p><b>「待付款」（線上付款）的訂單不能手動確認</b>，只有金流通知付款成功才會進入備貨
+     * （{@link #onlinePaymentReceived}）。狀態機本身允許「待付款 → 備貨中」（給系統用），所以要在這裡擋：
+     * 手動確認的話，訂單會變成「備貨中＋未付款」，顧客不能再付款（只有待付款能付）、逾時也不會自動取消，
+     * 超商取貨還會當成「已線上付款」不代收貨款 —— 等於沒收到錢就出貨。
+     * 擋下之後可以確定：<b>線上付款的訂單只要過了待付款，就一定已經付款</b>。
+     */
     @Transactional
     public AdminOrderDetailResponse confirm(String orderNo, long version, Long adminId, String note) {
-        Order order = loadForUpdate(orderNo, version);
+        Order order = loadAndCheckVersion(orderNo, version);
+        if (order.getStatus() == OrderStatus.PENDING_PAYMENT) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS,
+                    "線上付款的訂單要等顧客付款，付款成功後會自動進入備貨；不想等可以取消訂單");
+        }
         changeStatus(order, OrderStatus.PROCESSING, adminId, note);
         // 通知顧客（M01），交易 commit 後才寄
         eventPublisher.publishEvent(new OrderEvent(orderNo, OrderEventType.CONFIRMED));
@@ -105,7 +128,7 @@ public class AdminOrderService {
     /** 出貨（備貨中 → 已出貨），填物流單號 */
     @Transactional
     public AdminOrderDetailResponse ship(String orderNo, long version, String trackingNo, Long adminId, String note) {
-        Order order = loadForUpdate(orderNo, version);
+        Order order = loadAndCheckVersion(orderNo, version);
         order.setTrackingNo(trackingNo);
         changeStatus(order, OrderStatus.SHIPPED, adminId, note);
         eventPublisher.publishEvent(new OrderEvent(orderNo, OrderEventType.SHIPPED));
@@ -115,7 +138,7 @@ public class AdminOrderService {
     /** 已送達／已到店（已出貨 → 已送達） */
     @Transactional
     public AdminOrderDetailResponse deliver(String orderNo, long version, Long adminId, String note) {
-        Order order = loadForUpdate(orderNo, version);
+        Order order = loadAndCheckVersion(orderNo, version);
         changeStatus(order, OrderStatus.DELIVERED, adminId, note);
         // 宅配訂單排定 N 天後自動完成（M02），交易 commit 後才排
         eventPublisher.publishEvent(new OrderDeliveredEvent(orderNo, order.getShippingMethod()));
@@ -123,14 +146,13 @@ public class AdminOrderService {
     }
 
     /**
-     * 完成（已送達 → 已完成）。貨到付款的錢在顧客簽收／取件時收到，所以同時標記為已付款。
+     * 完成（已送達 → 已完成）。貨到付款的錢在顧客簽收／取件時收到，所以同時標記為已付款
+     * （線上付款的訂單早就付過了，不會動到原本的付款時間，見 {@link #markPaidIfNeeded}）。
      */
     @Transactional
     public AdminOrderDetailResponse complete(String orderNo, long version, Long adminId, String note) {
-        Order order = loadForUpdate(orderNo, version);
-        Instant now = Instant.now();
-        order.setPaymentStatus(PaymentStatus.PAID);
-        order.setPaidAt(now);
+        Order order = loadAndCheckVersion(orderNo, version);
+        markPaidIfNeeded(order);
         changeStatus(order, OrderStatus.COMPLETED, adminId, note);
         return toDetail(order);
     }
@@ -145,7 +167,10 @@ public class AdminOrderService {
      *       同一則訊息處理兩次，第二次也只是 false（冪等）</li>
      *   <li><b>操作者是 NULL</b>（狀態紀錄顯示「系統」，見 V1 的 order_status_histories）</li>
      *   <li>和家人同時按「完成」：兩邊都讀到「已送達」，但 @Version 讓後寫入的那個失敗 rollback，
-     *       不會有兩筆「→ 已完成」的紀錄</li>
+     *       不會有兩筆「→ 已完成」的紀錄。輸的如果是這裡，例外會讓訊息重試（M03），
+     *       重試時訂單已經是「已完成」→ 回傳 false，結束</li>
+     *   <li>這是 M02 寫的，當時還沒有悲觀鎖的寫法（P01 才加）。只會和「家人手動完成／退回」競爭，
+     *       靠 @Version＋重試就夠，所以沒有改成 FOR UPDATE</li>
      * </ul>
      *
      * @return 這次有把訂單改成已完成
@@ -156,8 +181,7 @@ public class AdminOrderService {
         if (order == null || order.getStatus() != OrderStatus.DELIVERED) {
             return false;
         }
-        order.setPaymentStatus(PaymentStatus.PAID);
-        order.setPaidAt(Instant.now());
+        markPaidIfNeeded(order);
         changeStatus(order, OrderStatus.COMPLETED, null, note);
         return true;
     }
@@ -171,8 +195,8 @@ public class AdminOrderService {
      *
      * <ul>
      *   <li>待付款 → 備貨中、已付款，通知顧客（和家人按「確認訂單」寄同一種信）</li>
-     *   <li>已取消（逾時、顧客自己取消）→ 訂單<b>維持已取消</b>（庫存已經還回去了），標記已付款，
-     *       狀態紀錄寫「請退款」，後台列表會看到「已取消＋已付款」</li>
+     *   <li>已取消（逾時、顧客或家人取消）→ 訂單<b>維持已取消</b>（庫存已經還回去了），標記已付款，
+     *       狀態紀錄寫「請退款」，後台的訂單詳情頁會顯示紅色的退款提醒（列表上目前看不出來，見 NOTES 的 P01）</li>
      *   <li>已經付過款 → 重複付款，同樣記錄「請退款」</li>
      * </ul>
      * 已經處理過的同一筆付款（金流重複通知）在 PaymentService 就擋掉了，不會進來這裡。
@@ -250,10 +274,7 @@ public class AdminOrderService {
                     status = OrderStatus.DELIVERED;
                 }
                 if (status == OrderStatus.DELIVERED) {
-                    if (order.getPaymentStatus() != PaymentStatus.PAID) {
-                        order.setPaymentStatus(PaymentStatus.PAID);
-                        order.setPaidAt(Instant.now());
-                    }
+                    markPaidIfNeeded(order);
                     changeStatus(order, OrderStatus.COMPLETED, null, note);
                     return true;
                 }
@@ -281,11 +302,14 @@ public class AdminOrderService {
 
     /**
      * 管理員取消（出貨前都可以，由狀態機決定），歸還庫存。
-     * 和顧客取消不同：顧客只能在「待確認」時取消。
+     * 和顧客取消不同：顧客只能在「待確認／待付款」時取消。
+     *
+     * <p>取消「已線上付款」的訂單（備貨中）：訂單變成「已取消＋已付款」，後台詳情頁會提醒到綠界後台退款。
+     * 退款目前是人工處理，程式不會把付款狀態改成 REFUNDED（見 {@link PaymentStatus}）。
      */
     @Transactional
     public AdminOrderDetailResponse cancel(String orderNo, long version, Long adminId, String note) {
-        Order order = loadForUpdate(orderNo, version);
+        Order order = loadAndCheckVersion(orderNo, version);
         changeStatus(order, OrderStatus.CANCELLED, adminId, note);
         orderStockService.restore(order);
         return toDetail(order);
@@ -299,7 +323,7 @@ public class AdminOrderService {
     @Transactional
     public AdminOrderDetailResponse markReturned(String orderNo, long version, boolean restock,
                                                  Long adminId, String note) {
-        Order order = loadForUpdate(orderNo, version);
+        Order order = loadAndCheckVersion(orderNo, version);
         String fullNote = (restock ? "已歸還庫存" : "未歸還庫存") + (note == null || note.isBlank() ? "" : "；" + note);
         changeStatus(order, OrderStatus.RETURNED, adminId, fullNote);
         if (restock) {
@@ -310,8 +334,11 @@ public class AdminOrderService {
 
     // ===== helpers =====
 
-    /** 讀出訂單並比對版本號：不同代表管理員看到的是舊資料 */
-    private Order loadForUpdate(String orderNo, long expectedVersion) {
+    /**
+     * 讀出訂單並比對版本號：不同代表管理員看到的是舊資料（樂觀鎖的「跨請求」那一半）。
+     * 這裡<b>沒有</b>鎖住資料列；真的加鎖（SELECT ... FOR UPDATE）的是 {@link OrderRepository#findForUpdateByOrderNo}，給系統操作用
+     */
+    private Order loadAndCheckVersion(String orderNo, long expectedVersion) {
         Order order = findOrThrow(orderNo);
         if (order.getVersion() != expectedVersion) {
             throw new BusinessException(ErrorCode.CONFLICT);
@@ -322,12 +349,25 @@ public class AdminOrderService {
     /**
      * 經過狀態機改狀態、立即寫入（@Version 檢查在這裡發生），再寫狀態紀錄。
      * 先 flush 訂單再做其他事（例如歸還庫存）：版本衝突的話在這裡就失敗。
+     *
+     * @param operatorId 操作的管理員；系統自動處理時傳 null（order_status_histories.operator_id 是 NULL，畫面顯示「系統」）
      */
-    private void changeStatus(Order order, OrderStatus target, Long adminId, String note) {
+    private void changeStatus(Order order, OrderStatus target, Long operatorId, String note) {
         OrderStatus from = order.transitionTo(target, Instant.now());
         orderRepository.saveAndFlush(order);
         historyRepository.save(new OrderStatusHistory(
-                order, from, target, adminId == null ? null : userRepository.getReferenceById(adminId), note));
+                order, from, target, operatorId == null ? null : userRepository.getReferenceById(operatorId), note));
+    }
+
+    /**
+     * 標記已付款，並記下付款時間；<b>已經付過的不動</b>。
+     * 線上付款的訂單在金流通知時就付款了，之後「完成」不能把付款時間蓋成完成的時間（查帳時要對得上綠界的紀錄）。
+     */
+    private void markPaidIfNeeded(Order order) {
+        if (order.getPaymentStatus() != PaymentStatus.PAID) {
+            order.setPaymentStatus(PaymentStatus.PAID);
+            order.setPaidAt(Instant.now());
+        }
     }
 
     private Order findOrThrow(String orderNo) {

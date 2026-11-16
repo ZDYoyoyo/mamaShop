@@ -96,6 +96,12 @@ describe('AdminOrderDetailView', () => {
     vi.mocked(getAdminOrder).mockResolvedValue(detail({ status: 'SHIPPED', trackingNo: 'T1' }))
     expect(actionLabels(await mountDetail())).toEqual(['已送達', '退回'])
 
+    // 待付款（線上付款）：不能手動確認，只能取消，並說明付款成功會自動確認
+    vi.mocked(getAdminOrder).mockResolvedValue(detail({ status: 'PENDING_PAYMENT', paymentMethod: 'ONLINE' }))
+    const awaiting = await mountDetail()
+    expect(actionLabels(awaiting)).toEqual(['取消訂單'])
+    expect(awaiting.find('.pending-payment').text()).toContain('付款成功後會自動變成「備貨中」')
+
     vi.mocked(getAdminOrder).mockResolvedValue(detail({ status: 'COMPLETED', paymentStatus: 'PAID' }))
     const done = await mountDetail()
     expect(done.find('.actions').exists()).toBe(false)

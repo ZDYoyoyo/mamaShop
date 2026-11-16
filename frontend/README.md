@@ -27,7 +27,9 @@ src/
 │   ├── catalog.js    # 商品、分類 API
 │   ├── auth.js       # 註冊、登入 API
 │   ├── orders.js     # 建立、查詢、列出、取消訂單 API
-│   └── admin/        # 後台 API（dashboard、orders、products、categories、shipping、accounts）
+│   ├── payments.js   # 線上付款（P01）：付款設定、前往綠界付款頁
+│   ├── logistics.js  # 超商電子地圖（P02）：物流設定、前往綠界電子地圖
+│   └── admin/        # 後台 API（dashboard、orders（含綠界物流單，P03）、products、categories、shipping、accounts）
 ├── stores/
 │   ├── auth.js       # 登入狀態（token、會員資料，存在 localStorage）
 │   └── cart.js       # 購物車（存在 localStorage）
@@ -38,7 +40,9 @@ src/
 │   ├── format.js     # 金額、庫存顯示
 │   ├── image.js      # 上傳前縮小照片、移除 EXIF
 │   ├── adminOrderActions.js # 後台訂單：每個狀態可以做哪些操作
-│   ├── validation.js # 表單驗證規則（和後端一致）
-│   └── labels.js     # 後端代碼 → 中文（超商品牌、付款方式）
+│   ├── validation.js # 表單驗證規則（和後端一致；含超商取貨的收件人姓名格式）
+│   ├── labels.js     # 後端代碼 → 中文（超商品牌、付款方式、訂單狀態）
+│   ├── postForm.js   # 整頁 POST 到外部網站（綠界的付款頁、電子地圖、寄件單都只接受 form POST）
+│   └── checkoutDraft.js # 跳到電子地圖前暫存結帳表單（sessionStorage），回來後還原
 └── assets/main.css   # 全站基本樣式與顏色變數
 ```

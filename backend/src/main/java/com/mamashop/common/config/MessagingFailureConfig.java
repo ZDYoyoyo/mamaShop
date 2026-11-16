@@ -18,8 +18,12 @@ import org.springframework.context.annotation.Configuration;
  *                     │ 還是失敗
  *                     ▼ MessageRecoverer（這裡的 Bean，Spring Boot 自動接到 @RabbitListener 上）
  *  exchange mamashop.failed（topic）、routing key「error.」＋原本的 routing key
- *     ├─ error.order.*       ──▶ mamashop.order-notifications.failed   （NotificationConfig 宣告）
- *     └─ error.auto-complete ──▶ mamashop.order-auto-complete.failed   （OrderTimeoutConfig 宣告）
+ *     ├─ error.order.*          ──▶ mamashop.order-notifications.failed     （通知信 M01，NotificationConfig 宣告）
+ *     ├─ error.auto-complete    ──▶ mamashop.order-auto-complete.failed     （自動完成 M02，OrderTimeoutConfig 宣告）
+ *     └─ error.payment-timeout  ──▶ mamashop.order-payment-timeout.failed   （未付款取消 P01，OrderTimeoutConfig 宣告）
+ *
+ * ⚠️ 新增 @RabbitListener 的佇列時，記得也宣告一個對應的 .failed 佇列並綁到這個 exchange：
+ * 沒有綁定的話，失敗的訊息送到 exchange 後沒有佇列接，還是會消失。
  * </pre>
  *
  * <ul>

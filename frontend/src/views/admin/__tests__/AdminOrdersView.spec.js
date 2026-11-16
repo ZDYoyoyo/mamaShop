@@ -59,6 +59,17 @@ describe('AdminOrdersView', () => {
     expect(listAdminOrders).toHaveBeenLastCalledWith({ status: '', shippingMethod: '', page: 1, size: 20 })
   })
 
+  it('狀態標籤包含「待付款」（線上付款還沒付的訂單，P01）', async () => {
+    const { wrapper, router } = await mountAt('/admin/orders')
+
+    expect(wrapper.findAll('.tabs button').map((b) => b.text())).toEqual([
+      '全部', '待確認', '備貨中', '已出貨', '已送達', '待付款', '已完成', '已取消', '已退回',
+    ])
+    await wrapper.findAll('.tabs button').find((b) => b.text() === '待付款').trigger('click')
+    await settle()
+    expect(router.currentRoute.value.query).toEqual({ status: 'PENDING_PAYMENT' })
+  })
+
   it('點狀態標籤：寫回網址並回到第 1 頁', async () => {
     const { wrapper, router } = await mountAt('/admin/orders?page=3')
 
