@@ -19,7 +19,7 @@ import LoadError from '@/components/LoadError.vue'
 import OrderProgress from '@/components/OrderProgress.vue'
 import OrderStatusTag from '@/components/OrderStatusTag.vue'
 import OrderActionDialog from '@/components/admin/OrderActionDialog.vue'
-import { availableActions, ORDER_ACTIONS } from '@/utils/adminOrderActions'
+import { availableActions, needsRefund, ORDER_ACTIONS } from '@/utils/adminOrderActions'
 import { formatDateTime, formatPrice } from '@/utils/format'
 import {
   cvsBrandLabel,
@@ -135,6 +135,8 @@ async function onStale(message) {
 function historyTitle(history) {
   const to = ORDER_STATUS[history.toStatus]?.label ?? history.toStatus
   if (!history.fromStatus) return `建立訂單（${to}）`
+  // 狀態沒變的紀錄（物流通知、需要退款的提醒、標記已退款）：內容在備註裡
+  if (history.fromStatus === history.toStatus) return `紀錄（${to}）`
   return `${ORDER_STATUS[history.fromStatus]?.label ?? history.fromStatus} → ${to}`
 }
 
@@ -159,21 +161,20 @@ function operatorText(history) {
     <div class="heading">
       <h1>訂單 {{ order.orderNo }}</h1>
       <OrderStatusTag :status="order.status" />
-      <el-tag :type="order.paymentStatus === 'PAID' ? 'success' : 'info'" effect="plain" disable-transitions>
+      <el-tag :type="order.paymentStatus === 'PAID' ? 'success' : 'info'" effect="plain" disable-transitions class="payment-status">
         {{ PAYMENT_STATUS_LABELS[order.paymentStatus] ?? order.paymentStatus }}
       </el-tag>
     </div>
     <p class="muted">下單時間 {{ formatDateTime(order.createdAt) }}</p>
-    <!-- 線上付款（P01）：取消之後才付款成功（逾時取消和付款剛好同時）、或重複付款，錢要退給顧客 -->
-    <el-alert
-      v-if="order.paymentMethod === 'ONLINE' && order.paymentStatus === 'PAID' && ['CANCELLED', 'RETURNED'].includes(order.status)"
-      type="error"
-      :closable="false"
-      show-icon
-      title="這筆訂單已經收到線上付款，但訂單不會出貨：請到綠界廠商後台退款"
-      description="綠界交易編號在下方「狀態紀錄」的備註裡"
-      class="refund-alert"
-    />
+    <!--
+      要退款：收了線上付款但不會出貨（取消之後才付款成功、已付款後取消或退回）。
+      到綠界後台退款後按「標記已退款」，付款狀態變成「已退款」，這個提醒就會消失
+    -->
+    <el-alert v-if="needsRefund(order)" type="error" :closable="false" show-icon class="refund-alert">
+      <template #title>這筆訂單已經收到線上付款，但訂單不會出貨：請到綠界廠商後台退款</template>
+      <p>綠界交易編號在下方「狀態紀錄」的備註裡。退款完成後請按下面的按鈕。</p>
+      <el-button type="primary" class="mark-refunded" @click="currentAction = 'refund'">標記已退款</el-button>
+    </el-alert>
 
     <!-- 待付款（線上付款，P01）：不能手動確認，說明原因，免得家人以為少了按鈕 -->
     <p v-if="order.status === 'PENDING_PAYMENT'" class="muted pending-payment">

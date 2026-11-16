@@ -36,6 +36,9 @@ import com.mamashop.user.entity.Role;
 import com.mamashop.user.entity.User;
 import com.mamashop.user.repository.UserRepository;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -226,13 +229,13 @@ class ShipmentIntegrationTest {
         String logisticsId = stubCreateSuccess("D8858181", "5655");
         shipmentService.createShipment(orderNo, 1, customer.getId(), null);
 
-        notify(logisticsId, 2068, "賣家已到門市寄件", "2026/11/15 10:00:00");
+        notify(logisticsId, 2068, "賣家已到門市寄件", daysLater(1));
         assertThat(status(orderNo)).isEqualTo(OrderStatus.SHIPPED);
 
-        notify(logisticsId, 2073, "包裹配達取件門市", "2026/11/16 10:00:00");
+        notify(logisticsId, 2073, "包裹配達取件門市", daysLater(2));
         assertThat(status(orderNo)).isEqualTo(OrderStatus.DELIVERED);
 
-        notify(logisticsId, 2067, "買家已到店取貨", "2026/11/17 18:30:00");
+        notify(logisticsId, 2067, "買家已到店取貨", daysLater(3));
         AdminOrderDetailResponse detail = adminOrderService.get(orderNo);
         assertThat(detail.order().status()).isEqualTo(OrderStatus.COMPLETED);
         assertThat(detail.order().paymentStatus()).isEqualTo(PaymentStatus.PAID); // 取貨付款：取件時收到錢
@@ -241,7 +244,7 @@ class ShipmentIntegrationTest {
 
         // 重複通知：不會再多一筆紀錄
         int histories = detail.histories().size();
-        notify(logisticsId, 2067, "買家已到店取貨", "2026/11/17 18:30:00");
+        notify(logisticsId, 2067, "買家已到店取貨", daysLater(3));
         assertThat(adminOrderService.get(orderNo).histories()).hasSize(histories);
         assertThat(shipmentService.findShipment(orderNo).orElseThrow().statusCode()).isEqualTo(2067);
     }
@@ -252,7 +255,7 @@ class ShipmentIntegrationTest {
         String logisticsId = stubCreateSuccess("16000587843", "");
         shipmentService.createShipment(orderNo, 1, customer.getId(), null);
 
-        notify(logisticsId, 3022, "買家已到店取貨", "2026/11/17 18:30:00");
+        notify(logisticsId, 3022, "買家已到店取貨", daysLater(3));
 
         AdminOrderDetailResponse detail = adminOrderService.get(orderNo);
         assertThat(detail.order().status()).isEqualTo(OrderStatus.COMPLETED);
@@ -265,9 +268,9 @@ class ShipmentIntegrationTest {
         String orderNo = processingOrder(CvsBrand.SEVEN);
         String logisticsId = stubCreateSuccess("D8858181", "5655");
         shipmentService.createShipment(orderNo, 1, customer.getId(), null);
-        notify(logisticsId, 2073, "包裹配達取件門市", "2026/11/16 10:00:00");
+        notify(logisticsId, 2073, "包裹配達取件門市", daysLater(2));
 
-        notify(logisticsId, 2074, "買家未取包裹，將退回物流中心", "2026/11/23 23:00:00");
+        notify(logisticsId, 2074, "買家未取包裹，將退回物流中心", daysLater(9));
 
         AdminOrderDetailResponse detail = adminOrderService.get(orderNo);
         assertThat(detail.order().status()).isEqualTo(OrderStatus.RETURNED);
@@ -275,7 +278,7 @@ class ShipmentIntegrationTest {
         assertThat(stock()).isEqualTo(9); // 包裹還在路上，不自動加回庫存
 
         // 之後「退回寄件門市」：訂單已經是已退回，只記錄
-        notify(logisticsId, 2099, "包裹重新配達寄件門市", "2026/11/26 10:00:00");
+        notify(logisticsId, 2099, "包裹重新配達寄件門市", daysLater(12));
         assertThat(adminOrderService.get(orderNo).histories().getLast().note()).contains("包裹重新配達寄件門市");
         assertThat(status(orderNo)).isEqualTo(OrderStatus.RETURNED);
     }
@@ -285,10 +288,10 @@ class ShipmentIntegrationTest {
         String orderNo = processingOrder(CvsBrand.SEVEN);
         String logisticsId = stubCreateSuccess("D8858181", "5655");
         shipmentService.createShipment(orderNo, 1, customer.getId(), null);
-        notify(logisticsId, 2073, "包裹配達取件門市", "2026/11/16 10:00:00");
+        notify(logisticsId, 2073, "包裹配達取件門市", daysLater(2));
 
         // 晚到的舊通知（寄件）
-        notify(logisticsId, 2068, "賣家已到門市寄件", "2026/11/15 10:00:00");
+        notify(logisticsId, 2068, "賣家已到門市寄件", daysLater(1));
 
         assertThat(shipmentService.findShipment(orderNo).orElseThrow().statusCode()).isEqualTo(2073);
     }
@@ -298,7 +301,7 @@ class ShipmentIntegrationTest {
         String orderNo = processingOrder(CvsBrand.SEVEN);
         String logisticsId = stubCreateSuccess("D8858181", "5655");
         shipmentService.createShipment(orderNo, 1, customer.getId(), null);
-        Map<String, String> params = notificationParams(logisticsId, 2067, "買家已到店取貨", "2026/11/17 18:30:00");
+        Map<String, String> params = notificationParams(logisticsId, 2067, "買家已到店取貨", daysLater(3));
 
         // 沒有簽章；用 SHA-256 簽（金流的算法）
         mockMvc.perform(notification(params)).andExpect(content().string("0|CheckMacValue Error"));
@@ -348,6 +351,16 @@ class ShipmentIntegrationTest {
 
     private static String join(Map<String, String> fields) {
         return fields.entrySet().stream().map(e -> e.getKey() + "=" + e.getValue()).collect(Collectors.joining("&"));
+    }
+
+    /**
+     * 綠界通知裡的狀態時間（UpdateStatusDate，台灣時間）：建立物流單的 N 天後。
+     * 不能寫死日期：比「物流單目前的狀態時間」（建立時是現在）還舊的通知會被當成晚到的舊通知略過，
+     * 寫死的話日期一過測試就失敗（實際發生過）
+     */
+    private static String daysLater(int days) {
+        return DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss")
+                .format(LocalDateTime.now(ZoneId.of("Asia/Taipei")).plusDays(days));
     }
 
     private void notify(String logisticsId, int code, String message, String time) throws Exception {

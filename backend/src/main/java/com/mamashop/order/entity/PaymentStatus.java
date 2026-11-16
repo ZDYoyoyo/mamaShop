@@ -13,8 +13,8 @@ public enum PaymentStatus {
      */
     PAID,
     /**
-     * 已退款。<b>目前程式不會設定這個值</b>：退款是到綠界廠商後台人工處理，系統沒有「標記已退款」的功能
-     * （NOTES 的 P01）。先保留，之後串退款 API 或加上手動標記時使用；資料庫的 CHECK 也已經允許這個值
+     * 已退款。退款本身是到綠界廠商後台人工處理（沒有串退款 API）；
+     * 退完後家人在後台按「標記已退款」才會變成這個值（AdminOrderService#markRefunded），程式不會自動設定
      */
     REFUNDED
 }

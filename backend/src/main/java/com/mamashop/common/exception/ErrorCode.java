@@ -56,6 +56,7 @@ public enum ErrorCode {
     PAYMENT_NOT_ALLOWED(HttpStatus.CONFLICT, "這筆訂單目前不需要付款"),
     PAYMENT_EXPIRED(HttpStatus.CONFLICT, "已超過付款期限，訂單即將自動取消，請重新下單"),
     PAYMENT_TOO_MANY_ATTEMPTS(HttpStatus.CONFLICT, "付款嘗試次數過多，請聯絡賣家"),
+    REFUND_NOT_ALLOWED(HttpStatus.CONFLICT, "只有「已取消或已退回、而且已付款」的訂單可以標記已退款"),
 
     // 物流（P02）
     CVS_MAP_UNAVAILABLE(HttpStatus.CONFLICT, "目前無法使用超商電子地圖，請手動填寫門市"),

@@ -119,4 +119,13 @@ public class AdminOrderController {
         return ApiResponse.ok(adminOrderService.markReturned(
                 orderNo, request.version(), request.restock(), admin.id(), request.note()));
     }
+
+    /** 標記已退款（到綠界後台退款之後按）：付款狀態 已付款 → 已退款，訂單狀態不變 */
+    @Operation(summary = "標記已退款（已取消／已退回＋已付款的訂單；不會真的退款，只是記錄）")
+    @PostMapping("/{orderNo}/refund")
+    public ApiResponse<AdminOrderDetailResponse> markRefunded(@AuthenticationPrincipal AuthUser admin,
+                                                              @PathVariable @Size(max = 32) String orderNo,
+                                                              @Valid @RequestBody AdminOrderActionRequest request) {
+        return ApiResponse.ok(adminOrderService.markRefunded(orderNo, request.version(), admin.id(), request.note()));
+    }
 }

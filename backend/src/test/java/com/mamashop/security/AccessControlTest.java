@@ -115,6 +115,7 @@ class AccessControlTest {
                 e("POST", "/api/admin/orders/{orderNo}/deliver", Access.ADMIN),
                 e("POST", "/api/admin/orders/{orderNo}/complete", Access.ADMIN),
                 e("POST", "/api/admin/orders/{orderNo}/cancel", Access.ADMIN),
+                e("POST", "/api/admin/orders/{orderNo}/refund", Access.ADMIN),
                 // 綠界物流單（P03）
                 e("GET", "/api/admin/orders/{orderNo}/shipment", Access.ADMIN),
                 e("POST", "/api/admin/orders/{orderNo}/shipment", Access.ADMIN),

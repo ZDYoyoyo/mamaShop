@@ -301,11 +301,41 @@ public class AdminOrderService {
     }
 
     /**
+     * 標記已退款：家人到綠界廠商後台退款<b>之後</b>回來按，付款狀態 已付款 → 已退款。
+     *
+     * <p>這裡<b>不會真的退款</b>（沒有串綠界的退款 API），只是記錄「這筆已經處理過了」：
+     * 否則訂單一直是「已取消＋已付款」，後台的退款提醒不會消失，分不出哪些退了、哪些還沒。
+     *
+     * <ul>
+     *   <li>只有「已取消或已退回＋已付款」的訂單可以標記（收了錢但不會出貨）。
+     *       其他情況（例如還在出貨流程中）標記成已退款，會變成「沒收到錢卻照常出貨」</li>
+     *   <li>訂單狀態不變，所以不經過狀態機；但一樣比對版本號、寫一筆紀錄（誰、什麼時候標記的）</li>
+     *   <li>paid_at 保留：之後查帳還看得到當初什麼時候付的。退款的時間就是這筆紀錄的時間</li>
+     *   <li>「同一張訂單付了兩次」（重複付款）不適用：訂單照常出貨、狀態維持已付款，
+     *       多付的那一筆退款後不用在這裡標記（狀態紀錄裡有提醒）</li>
+     * </ul>
+     */
+    @Transactional
+    public AdminOrderDetailResponse markRefunded(String orderNo, long version, Long adminId, String note) {
+        Order order = loadAndCheckVersion(orderNo, version);
+        boolean ended = order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.RETURNED;
+        if (!ended || order.getPaymentStatus() != PaymentStatus.PAID) {
+            throw new BusinessException(ErrorCode.REFUND_NOT_ALLOWED);
+        }
+        order.setPaymentStatus(PaymentStatus.REFUNDED);
+        orderRepository.saveAndFlush(order);
+        historyRepository.save(new OrderStatusHistory(order, order.getStatus(), order.getStatus(),
+                userRepository.getReferenceById(adminId),
+                "已退款" + (note == null || note.isBlank() ? "" : "；" + note)));
+        return toDetail(order);
+    }
+
+    /**
      * 管理員取消（出貨前都可以，由狀態機決定），歸還庫存。
      * 和顧客取消不同：顧客只能在「待確認／待付款」時取消。
      *
      * <p>取消「已線上付款」的訂單（備貨中）：訂單變成「已取消＋已付款」，後台詳情頁會提醒到綠界後台退款。
-     * 退款目前是人工處理，程式不會把付款狀態改成 REFUNDED（見 {@link PaymentStatus}）。
+     * 退款是到綠界後台人工處理，退完再按「標記已退款」（{@link #markRefunded}）。
      */
     @Transactional
     public AdminOrderDetailResponse cancel(String orderNo, long version, Long adminId, String note) {

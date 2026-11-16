@@ -229,3 +229,40 @@ describe('AdminOrderDetailView 綠界物流單（P03）', () => {
     expect(getShipment).not.toHaveBeenCalled()
   })
 })
+
+describe('AdminOrderDetailView 退款', () => {
+  const cancelledPaid = (overrides = {}, version = 4) =>
+    detail({ status: 'CANCELLED', paymentMethod: 'ONLINE', paymentStatus: 'PAID', cancelledAt: '2026-11-14T03:00:00Z', ...overrides }, version)
+
+  beforeEach(() => {
+    document.body.innerHTML = ''
+    setActivePinia(createPinia())
+    vi.mocked(getAdminOrder).mockReset()
+    vi.mocked(runOrderAction).mockReset()
+    vi.mocked(getLogisticsOptions).mockResolvedValue({ cvsMapEnabled: false, shipmentEnabled: false })
+    vi.mocked(getShipment).mockResolvedValue(null)
+  })
+
+  it('已取消＋已付款：提醒退款；標記已退款後提醒消失、顯示「已退款」', async () => {
+    vi.mocked(getAdminOrder).mockResolvedValue(cancelledPaid())
+    vi.mocked(runOrderAction).mockResolvedValue(cancelledPaid({ paymentStatus: 'REFUNDED' }, 5))
+    const wrapper = await mountDetail()
+    expect(wrapper.find('.refund-alert').text()).toContain('請到綠界廠商後台退款')
+
+    await wrapper.find('button.mark-refunded').trigger('click')
+    await settle()
+    expect(document.querySelector('.el-dialog').textContent).toContain('這裡不會真的退款')
+    document.querySelector('.el-dialog__footer .el-button:last-child').click()
+    await settle()
+
+    expect(runOrderAction).toHaveBeenCalledWith('refund', 'M1', { version: 4, note: null })
+    await vi.waitFor(() => expect(wrapper.find('.refund-alert').exists()).toBe(false))
+    expect(wrapper.find('.payment-status').text()).toBe('已退款')
+  })
+
+  it('正常完成的已付款訂單不提醒退款', async () => {
+    vi.mocked(getAdminOrder).mockResolvedValue(detail({ status: 'COMPLETED', paymentStatus: 'PAID' }))
+    expect((await mountDetail()).find('.refund-alert').exists()).toBe(false)
+  })
+})
+

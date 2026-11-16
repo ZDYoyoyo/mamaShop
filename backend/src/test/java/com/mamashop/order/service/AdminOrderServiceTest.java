@@ -117,6 +117,44 @@ class AdminOrderServiceTest {
     }
 
     @Test
+    void markRefunded_cancelledPaidOrder_becomesRefunded_keepsPaidAt() {
+        Instant paidAt = Instant.parse("2026-11-14T02:05:00Z");
+        Order order = order(OrderStatus.CANCELLED, 5);
+        order.setPaymentStatus(PaymentStatus.PAID);
+        order.setPaidAt(paidAt);
+        stubAction(order);
+
+        AdminOrderDetailResponse result = adminOrderService.markRefunded("M1", 5, ADMIN_ID, "11/16 已在綠界後台退款");
+
+        assertThat(result.order().paymentStatus()).isEqualTo(PaymentStatus.REFUNDED);
+        assertThat(result.order().status()).isEqualTo(OrderStatus.CANCELLED); // 訂單狀態不變
+        assertThat(result.order().paidAt()).isEqualTo(paidAt);
+        ArgumentCaptor<OrderStatusHistory> history = ArgumentCaptor.forClass(OrderStatusHistory.class);
+        verify(historyRepository).save(history.capture());
+        assertThat(history.getValue().getOperator()).isSameAs(admin);
+        assertThat(history.getValue().getNote()).isEqualTo("已退款；11/16 已在綠界後台退款");
+        verifyNoInteractions(orderStockService, eventPublisher);
+    }
+
+    @Test
+    void markRefunded_isRejected_unlessEndedAndPaid() {
+        // 還在出貨流程中的已付款訂單、沒付款的已取消訂單、已經標記過的：都不行
+        Order processingPaid = order(OrderStatus.PROCESSING, 1);
+        processingPaid.setPaymentStatus(PaymentStatus.PAID);
+        Order cancelledUnpaid = order(OrderStatus.CANCELLED, 1);
+        Order alreadyRefunded = order(OrderStatus.RETURNED, 1);
+        alreadyRefunded.setPaymentStatus(PaymentStatus.REFUNDED);
+
+        for (Order order : List.of(processingPaid, cancelledUnpaid, alreadyRefunded)) {
+            when(orderRepository.findByOrderNo("M1")).thenReturn(Optional.of(order));
+            assertThatThrownBy(() -> adminOrderService.markRefunded("M1", 1, ADMIN_ID, null))
+                    .extracting("errorCode").isEqualTo(ErrorCode.REFUND_NOT_ALLOWED);
+        }
+        verify(orderRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(historyRepository);
+    }
+
+    @Test
     void cancel_restoresStock_andRecordsAdminAsOperator() {
         Order order = order(OrderStatus.PROCESSING, 1);
         stubAction(order);

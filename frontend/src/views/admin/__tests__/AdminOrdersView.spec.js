@@ -51,6 +51,20 @@ describe('AdminOrdersView', () => {
     expect(wrapper.find('a.order').attributes('href')).toBe('/admin/orders/M2611130000000001')
   })
 
+  it('收了線上付款但不會出貨的訂單顯示「需退款」；標記已退款後不顯示', async () => {
+    vi.mocked(listAdminOrders).mockResolvedValue({
+      items: [
+        { ...ORDER, orderNo: 'M1', status: 'CANCELLED', paymentStatus: 'PAID' },
+        { ...ORDER, orderNo: 'M2', status: 'CANCELLED', paymentStatus: 'REFUNDED' },
+        { ...ORDER, orderNo: 'M3', status: 'COMPLETED', paymentStatus: 'PAID' },
+      ],
+      page: 1, size: 20, totalElements: 3, totalPages: 1,
+    })
+    const { wrapper } = await mountAt('/admin/orders')
+
+    expect(wrapper.findAll('.order').map((o) => o.find('.refund-tag').exists())).toEqual([true, false, false])
+  })
+
   it('依網址的條件查詢；亂填的狀態當作沒填', async () => {
     await mountAt('/admin/orders?status=SHIPPED&shippingMethod=HOME_DELIVERY&page=2')
     expect(listAdminOrders).toHaveBeenLastCalledWith({ status: 'SHIPPED', shippingMethod: 'HOME_DELIVERY', page: 2, size: 20 })
