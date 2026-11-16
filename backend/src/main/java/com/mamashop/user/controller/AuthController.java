@@ -1,5 +1,6 @@
 package com.mamashop.user.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import com.mamashop.common.response.ApiResponse;
 import com.mamashop.user.dto.LoginRequest;
 import com.mamashop.user.dto.LoginResponse;
@@ -35,10 +36,12 @@ public class AuthController {
         return ApiResponse.ok(authService.register(request));
     }
 
-    /** 登入，回傳 JWT。 */
+    /** 登入，回傳 JWT。同一個來源失敗太多次會暫時鎖定（429），見 LoginAttemptService */
     @Operation(summary = "登入，取得 JWT")
     @PostMapping("/login")
-    public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ApiResponse.ok(authService.login(request));
+    public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest http) {
+        // getRemoteAddr：正式環境經過 Nginx，後端設定了 SERVER_FORWARD_HEADERS_STRATEGY=native，
+        // 這裡拿到的是 Nginx 轉來的「使用者真正的 IP」，不是 Nginx 容器的 IP（D03）
+        return ApiResponse.ok(authService.login(request, http.getRemoteAddr()));
     }
 }
