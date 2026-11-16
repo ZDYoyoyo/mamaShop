@@ -22,6 +22,7 @@ public enum ErrorCode {
     EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "此 Email 已經註冊過"),
     // 不區分「帳號不存在」和「密碼錯誤」，避免被拿來試探哪些 Email 有註冊
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "Email 或密碼錯誤"),
+    TOO_MANY_LOGIN_ATTEMPTS(HttpStatus.TOO_MANY_REQUESTS, "登入失敗次數過多，請稍後再試"),
     CANNOT_DISABLE_SELF(HttpStatus.CONFLICT, "不能停用自己的帳號"),
 
     // ===== 檔案上傳 =====

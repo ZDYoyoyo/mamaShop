@@ -117,6 +117,15 @@ app:
     auto-complete-after: ${ORDER_AUTO_COMPLETE_AFTER:7d}
     # 線上付款（P01）的訂單多久沒付款就自動取消並歸還庫存
     payment-timeout: ${ORDER_PAYMENT_TIMEOUT:30m}
+  login-limit:
+    # 登入失敗次數限制（防暴力猜密碼），計數存在 Redis；Redis 連不到時不限制。測試預設關閉
+    enabled: ${LOGIN_LIMIT_ENABLED:true}
+    # 同一個 IP 對同一個帳號，在 window 內最多失敗幾次
+    max-failures-per-account: ${LOGIN_LIMIT_PER_ACCOUNT:5}
+    # 同一個 IP 不管猜哪個帳號，在 window 內最多失敗幾次
+    max-failures-per-ip: ${LOGIN_LIMIT_PER_IP:30}
+    # 從第一次失敗開始算，多久之後計數歸零（也就是最多鎖多久）
+    window: ${LOGIN_LIMIT_WINDOW:15m}
   payment:
     # 線上付款（P01，綠界 ECPay）。沒開的話結帳頁只有貨到付款
     ecpay:
