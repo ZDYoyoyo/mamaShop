@@ -9,6 +9,7 @@ import { listAdminOrders } from '@/api/admin/orders'
 import LoadError from '@/components/LoadError.vue'
 import OrderStatusTag from '@/components/OrderStatusTag.vue'
 import { formatDateTime, formatPrice } from '@/utils/format'
+import { needsRefund } from '@/utils/adminOrderActions'
 import { ORDER_STATUS, SHIPPING_METHOD_LABELS } from '@/utils/labels'
 
 const PAGE_SIZE = 20
@@ -143,7 +144,11 @@ function positiveInt(value) {
         <RouterLink :to="{ name: 'admin-order-detail', params: { orderNo: order.orderNo } }" class="order">
           <div class="line">
             <span class="time">{{ formatDateTime(order.createdAt) }}</span>
-            <OrderStatusTag :status="order.status" />
+            <span class="tags">
+              <!-- 收了線上付款但不會出貨：提醒家人點進去處理退款 -->
+              <el-tag v-if="needsRefund(order)" type="danger" effect="dark" disable-transitions class="refund-tag">需退款</el-tag>
+              <OrderStatusTag :status="order.status" />
+            </span>
           </div>
           <div class="line">
             <span class="who">
@@ -279,5 +284,10 @@ h1 {
   .select {
     flex: 1 1 140px;
   }
+}
+.tags {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
 }
 </style>

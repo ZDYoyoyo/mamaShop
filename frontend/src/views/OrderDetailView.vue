@@ -29,6 +29,9 @@ const loading = ref(true)
 const notFound = ref(false)
 const errorMessage = ref('')
 
+/** 付款方式後面的說明。已退款：家人在綠界退款後於後台標記 */
+const PAYMENT_NOTE = { PAID: '（已付款）', REFUNDED: '（已退款）' }
+
 const route = useRoute()
 const cancellable = computed(() => order.value && isCancellableByCustomer(order.value.status))
 
@@ -187,7 +190,7 @@ async function cancel() {
       <p v-else>
         {{ SHIPPING_METHOD_LABELS.CVS_PICKUP }}：{{ cvsBrandLabel(order.cvsBrand) }} {{ order.cvsStoreName }}（{{ order.cvsStoreCode }}）
       </p>
-      <p>{{ PAYMENT_METHOD_LABELS[order.paymentMethod] }}{{ order.paymentStatus === 'PAID' ? '（已付款）' : '' }}</p>
+      <p>{{ PAYMENT_METHOD_LABELS[order.paymentMethod] }}{{ PAYMENT_NOTE[order.paymentStatus] ?? '' }}</p>
       <p v-if="order.note" class="note">備註：{{ order.note }}</p>
       <p class="muted">下單時間：{{ formatDateTime(order.createdAt) }}</p>
     </section>

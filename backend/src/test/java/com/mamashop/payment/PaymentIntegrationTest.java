@@ -275,6 +275,13 @@ class PaymentIntegrationTest {
         assertThat(detail.order().paymentStatus()).isEqualTo(PaymentStatus.PAID); // 後台看到「已取消＋已付款」→ 要退款
         assertThat(detail.histories().getLast().note()).contains("請到綠界後台退款");
         assertThat(stock()).isEqualTo(10);
+
+        // 家人到綠界後台退款後，回來標記已退款
+        AdminOrderDetailResponse refunded = adminOrderService.markRefunded(orderNo, detail.version(), customer.getId(), null);
+        assertThat(refunded.order().paymentStatus()).isEqualTo(PaymentStatus.REFUNDED);
+        assertThat(refunded.order().status()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(refunded.histories().getLast().note()).isEqualTo("已退款");
+        assertThat(refunded.histories().getLast().operatorName()).isNotEqualTo("系統");
     }
 
     @Test

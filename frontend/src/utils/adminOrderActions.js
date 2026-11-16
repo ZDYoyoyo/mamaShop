@@ -52,6 +52,26 @@ export const ORDER_ACTIONS = {
   },
 }
 
+/**
+ * 標記已退款：不在下面「依狀態」的操作裡（它不改訂單狀態，要看的是付款狀態），
+ * 由訂單詳情頁的退款提醒打開，見 needsRefund
+ */
+ORDER_ACTIONS.refund = {
+  label: '標記已退款',
+  type: 'primary',
+  description:
+    '請先到綠界廠商後台完成退款，再回來按這個。這裡不會真的退款，只是記錄「這筆已經退了」，退款提醒就會消失。標記後無法復原。',
+  success: '已標記為已退款',
+}
+
+/**
+ * 這筆訂單要退款嗎：收了錢（已付款）但不會出貨（已取消或已退回）。
+ * 只有線上付款會這樣（貨到付款要到「已完成」才會是已付款）。退款後按「標記已退款」，付款狀態變成 REFUNDED 就不再提醒
+ */
+export function needsRefund(order) {
+  return order.paymentStatus === 'PAID' && (order.status === 'CANCELLED' || order.status === 'RETURNED')
+}
+
 const ACTIONS_BY_STATUS = {
   PENDING_PAYMENT: ['cancel'],
   PENDING_CONFIRM: ['confirm', 'cancel'],
