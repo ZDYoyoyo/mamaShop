@@ -167,12 +167,17 @@ push 到 main 之後，Vercel 和 Render 都會自動重新部署（Render 的�
 
 | 項目 | 內容 |
 |---|---|
-| 完成日期 | |
-| 前端網址（Vercel） | |
-| 後端網址（Render） | |
-| 休眠後第一次打開實際等了多久 | |
-| `render.yaml` 的 Blueprint 有沒有直接成功 | |
+| 完成日期 | 2026-11-17 |
+| 前端網址（Vercel） | <https://mamashop-demo.vercel.app> |
+| 後端網址（Render） | `https://mamashop-demo-backend.onrender.com`（和 `vercel.json` 的預設值相同，不用改） |
+| 資料庫（Neon） | AWS Asia Pacific (Singapore)，直接連線（沒有 `-pooler`） |
+| 公開的展示帳號 | `test001@example.com`（一般顧客，README 有寫密碼） |
+| 休眠後第一次打開實際等了多久 | （請自己量一次再填） |
+| `render.yaml` 的 Blueprint 有沒有直接成功 | 有，照第 2 步就建立成功，不用手動建立 |
+
+檢查（第 5 步）全部通過：註冊、加入購物車、結帳（貨到付款）、我的訂單、後台登入、確認→出貨→送達→完成、上傳商品圖片、直接打開 `/products/1` 重新整理不會 404。
 
 遇到的問題與解法：
 
--
+- **Render 在建立 Blueprint 時找不到 repo**：註冊時授權 GitHub 沒有勾到 `mamaShop`。到 GitHub 的 Settings → Applications → Installed GitHub Apps（<https://github.com/settings/installations>）→ Render → Configure，在 Repository access 加上 `mamaShop` 後回 Render 重新整理
+- **展示帳號的 Email 要是 Email 格式**（後端的註冊有檢查），只打 `test001` 不行，所以用 `test001@example.com`
