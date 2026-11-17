@@ -7,6 +7,26 @@ review PR 時搭配這份看；上線前（D08）再整份檢查一次。
 
 ---
 
+## 目前進度與下一步（2026-11-17 更新）
+
+**已完成**
+- PLAN 的 B、F、A、R（R03 只有設計文件）、M、P 系列，以及 D06（CI）
+- 正式站上線前能先準備的都已準備好：D01／D03／D04／D05／D07 的操作指南、設定檔與腳本（`docs/deploy/`），標記已退款、登入失敗次數限制、隱私權政策頁面（商店資料暫定）、作品集版 README
+- **展示站已上線**：<https://mamashop-demo.vercel.app>（Vercel＋Render＋Neon，展示帳號 `test001@example.com`，見 README）
+
+**正在做：正式站部署（D01～D08），照 `docs/deploy/` 一步一步做**
+- D01 第 1 步：在自己的電腦產生 SSH 金鑰（`ssh-keygen -t ed25519 -C "mamashop"`）——**還沒回報是否完成**
+- D01 第 2 步：**租主機，還在選廠商**。比較過的選項（第三方資料，以官網為準）：
+  - A. Akamai（Linode）試用約 100 美元／60 天，之後每月付費——指南可以直接照做（建議）
+  - B. Oracle Cloud Always Free（ARM 2 核心／12GB，永久免費）——要多處理註冊、ARM、Oracle 自己的防火牆（iptables 與網頁後台的規則），D01 指南要補步驟
+  - Google Cloud 的 e2-micro 只有 1GB，不建議
+- 規格：Ubuntu 24.04、2GB 記憶體以上、東京或新加坡、建立時貼上 SSH 公鑰
+- 網域（D02）可以先買，DNS 等 D03 完成後再設定
+
+**接下來的順序**：D01（主機設定、`check-server.sh` 全部 PASS）→ D02（DNS）→ D03（部署，先用 `http://主機IP`）→ D04（HTTPS）→ D05（備份）→ D06（GitHub 分支保護）→ D07（外部監控）→ D08（上線檢查，清單在本文件下一節）
+
+---
+
 ## 尚未 review 的 PR
 
 PR #1–#17 已 merge，但你還沒看過。B 系列完成後一起研究。建議依序看，每個 PR 的重點列在下方各任務。
