@@ -6,7 +6,7 @@
 #
 # 展示站和正式站是「同一份程式」，差別只有這裡的環境變數：
 #   - 沒有 Redis、RabbitMQ：商品快取、通知信、延遲任務（自動完成、逾時取消）、登入次數限制都關掉
-#   - 沒有綠界：只有貨到付款、超商門市手動填
+#   - 綠界用公開的測試商店（不會真的扣款或寄件）：線上付款、超商電子地圖、物流單都能試
 #   - APP_PROFILE=dev：載入示範商品
 #   - 免費方案 512MB 記憶體、0.1 CPU：JVM 的記憶體要自己設上限
 services:
@@ -95,3 +95,28 @@ services:
         value: "0"
       - key: SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT
         value: "60000"
+
+      # ----- 綠界：用綠界公開的測試商店（和 .env.example 相同，不是機密），不會真的扣款或寄件 -----
+      # 付款通知、門市回傳、物流通知會送到 SITE_URL（Vercel），再由 vercel.json 轉給這個後端
+      # 正式站不要用這組值：正式站的商店代號與金鑰放在主機的 .env
+      - key: ECPAY_ENABLED
+        value: "true"
+      - key: ECPAY_MERCHANT_ID
+        value: "3002607"
+      - key: ECPAY_HASH_KEY
+        value: pwFHCqoQZGmho4w6
+      - key: ECPAY_HASH_IV
+        value: EkRm7iFT261dpevs
+      - key: ECPAY_LOGISTICS_ENABLED
+        value: "true"
+      - key: ECPAY_LOGISTICS_MERCHANT_ID
+        value: "2000933"
+      - key: ECPAY_LOGISTICS_HASH_KEY
+        value: XBERn1YOvpM9nfZc
+      - key: ECPAY_LOGISTICS_HASH_IV
+        value: h1ONHk4P4yqbl5LK
+      # 寄件人：印在測試的寄件單上（假資料）
+      - key: ECPAY_LOGISTICS_SENDER_NAME
+        value: Mama Wang
+      - key: ECPAY_LOGISTICS_SENDER_CELL_PHONE
+        value: "0911222333"
