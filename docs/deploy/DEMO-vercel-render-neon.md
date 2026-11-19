@@ -179,7 +179,7 @@ push 到 main 之後，Vercel 和 Render 都會自動重新部署（Render 的�
 
 遇到的問題與解法：
 
-- **一開始沒有線上付款與 7-11 地圖**：最初的 `render.yaml` 刻意沒開綠界。2026-11-19 加上綠界公開測試商店的環境變數後打開（Render 沒有自動帶入新變數的話，到服務的 Environment 手動加上 `render.yaml` 裡 `ECPAY_` 開頭的那幾個）
+- **一開始沒有線上付款與 7-11 地圖**：最初的 `render.yaml` 刻意沒開綠界。2026-11-19 加上綠界公開測試商店的環境變數後打開（Render 沒有自動帶入新變數的話，到服務的 Environment 手動加上 `render.yaml` 裡 `ECPAY_` 開頭的那幾個）。實際確認過：電子地圖選門市、測試卡付款、付款後訂單變成已付款都正常
 
 - **Render 在建立 Blueprint 時找不到 repo**：註冊時授權 GitHub 沒有勾到 `mamaShop`。到 GitHub 的 Settings → Applications → Installed GitHub Apps（<https://github.com/settings/installations>）→ Render → Configure，在 Repository access 加上 `mamaShop` 後回 Render 重新整理
 - **展示帳號的 Email 要是 Email 格式**（後端的註冊有檢查），只打 `test001` 不行，所以用 `test001@example.com`
