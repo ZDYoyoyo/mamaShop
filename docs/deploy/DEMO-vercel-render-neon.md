@@ -23,7 +23,7 @@
 | 通知信、自動完成、逾時取消 | 有（RabbitMQ） | 沒有 |
 | 商品快取、登入次數限制 | 有（Redis） | 沒有 |
 | 防重複下單 | 前端＋後端 | 只剩前端（送出後停用按鈕） |
-| 線上付款、超商電子地圖、物流單 | 可以開 | 關閉（只有貨到付款、手動填門市） |
+| 線上付款、超商電子地圖、物流單 | 綠界正式商店 | 綠界**公開的測試商店**（不會真的扣款或寄件；測試卡號 `4311-9522-2222-2222`、有效期限任一未來日期、安全碼 `222`）。沒有 RabbitMQ，所以**沒付款的線上訂單不會逾時自動取消**，要到後台手動取消；Render 休眠時綠界的通知可能失敗，綠界會重送，訂單可能晚幾分鐘才變成已付款 |
 | 商品 | 家人上架 | 13 個示範商品（`APP_PROFILE=dev` 的測試資料） |
 
 > 為什麼等這麼久：免費方案只有 0.1 個 CPU。本機用同樣的限制（512MB、0.1 CPU）實測，Spring Boot 啟動要 150～170 秒；
@@ -178,6 +178,8 @@ push 到 main 之後，Vercel 和 Render 都會自動重新部署（Render 的�
 檢查（第 5 步）全部通過：註冊、加入購物車、結帳（貨到付款）、我的訂單、後台登入、確認→出貨→送達→完成、上傳商品圖片、直接打開 `/products/1` 重新整理不會 404。
 
 遇到的問題與解法：
+
+- **一開始沒有線上付款與 7-11 地圖**：最初的 `render.yaml` 刻意沒開綠界。2026-11-19 加上綠界公開測試商店的環境變數後打開（Render 沒有自動帶入新變數的話，到服務的 Environment 手動加上 `render.yaml` 裡 `ECPAY_` 開頭的那幾個）
 
 - **Render 在建立 Blueprint 時找不到 repo**：註冊時授權 GitHub 沒有勾到 `mamaShop`。到 GitHub 的 Settings → Applications → Installed GitHub Apps（<https://github.com/settings/installations>）→ Render → Configure，在 Repository access 加上 `mamaShop` 後回 Render 重新整理
 - **展示帳號的 Email 要是 Email 格式**（後端的註冊有檢查），只打 `test001` 不行，所以用 `test001@example.com`
