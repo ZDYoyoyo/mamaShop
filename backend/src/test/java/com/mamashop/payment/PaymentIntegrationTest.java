@@ -176,6 +176,24 @@ class PaymentIntegrationTest {
                 .isEqualTo("PAID");
     }
 
+    /**
+     * 綠界送通知時帶的 Accept 不一定包含 text/plain（展示站實際收到 406，訂單一直停在待付款）。
+     * 不管 Accept 是什麼都要處理並回 1|OK。
+     */
+    @Test
+    void paidNotification_isAccepted_whateverTheAcceptHeader() throws Exception {
+        for (String accept : List.of("text/html", "application/json", "text/html,application/xhtml+xml,*/*;q=0.8")) {
+            String orderNo = onlineOrder();
+            String tradeNo = paymentService.startPayment(customer.getId(), orderNo).fields().get("MerchantTradeNo");
+
+            mockMvc.perform(notification(signed(paidParams(tradeNo, "850"))).header("Accept", accept))
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_PLAIN))
+                    .andExpect(content().string("1|OK"));
+            assertThat(order(orderNo).order().paymentStatus()).as("Accept: %s", accept).isEqualTo(PaymentStatus.PAID);
+        }
+    }
+
     @Test
     void duplicateNotification_isProcessedOnce() throws Exception {
         String orderNo = onlineOrder();

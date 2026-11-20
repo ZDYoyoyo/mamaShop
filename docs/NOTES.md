@@ -27,6 +27,33 @@ review PR 時搭配這份看；上線前（D08）再整份檢查一次。
 
 ---
 
+## 修正：綠界的通知被回 406，付款成功但訂單停在待付款（2026-11-20）
+
+**現象**：展示站用測試卡付款，綠界顯示「付款成功」，訂單卻一直是待付款，過了一天也沒變（綠界的重送也一樣失敗）。
+
+**原因**：付款通知與物流通知的 `@PostMapping` 寫了 `produces = text/plain`。這個設定不只是「回應的格式」，Spring 還會拿它和請求的 `Accept` 比對；綠界送通知時帶的 `Accept` 不包含 `text/plain`，比對不到就直接回 **406**，根本沒進到我們的程式。Render 的 Log 只看得到 `HttpMediaTypeNotAcceptableException`，沒有任何「綠界」相關的紀錄。
+
+**為什麼之前沒發現**：測試用 MockMvc、手動用 curl 模擬通知，都沒有帶 `Accept`（curl 預設是 `*/*`），所以都通過。本機收不到綠界的真實通知，展示站是第一次真的收到。
+
+**排查過程**（面試可以講）：
+1. 用 curl 直接打展示站的通知網址：回「檢查碼錯誤」，代表 Vercel → Render → 後端是通的
+2. 用展示帳號自己刷一筆測試卡，重現「付款成功、訂單沒變」
+3. Render 的 Log 在付款的同一秒出現 `HttpMediaTypeNotAcceptableException`
+4. 用 curl 帶不同的 `Accept` 打：`*/*` 回 200，`text/html`、`application/json` 都回 406，確定原因
+5. 先寫一個帶 `Accept: text/html` 的測試，確認它失敗（406），修好後通過
+
+**修正**：
+- 拿掉 `produces`，改用 `EcpayReply.plainText()` 在回應裡直接指定 `Content-Type: text/plain`。已經指定 Content-Type 時，Spring 就不再依 `Accept` 協商
+- 付款通知、物流通知各加一個帶不同 `Accept` 的測試
+- 電子地圖的門市回傳（`cvs-map-reply`）回的是 303 轉址、沒有 body，不受影響（展示站選門市本來就正常）
+
+**之後要注意**：
+- ℹ️ 給外部系統呼叫的 API，不要用 `produces` 限制回應格式；對方帶什麼 `Accept` 我們控制不了
+- ℹ️ `GlobalExceptionHandler` 把這類 4xx 記成 debug，所以 Log 裡只看得到「處理例外時又失敗」的 WARN，看不出原始原因。這次沒改，留意 Log 裡的 `HttpMediaTypeNotAcceptableException`
+- 🔲 merge、Render 部署完後，在展示站再刷一次測試卡確認；之前卡住的測試訂單 `M2611197159321439`（展示帳號）確認後取消
+
+---
+
 ## 展示站打開綠界測試環境（2026-11-19）
 
 - `render.yaml` 加上綠界**公開測試商店**的金流與物流環境變數（和根目錄 `.env.example` 相同的值，綠界公開給所有開發者，不算機密），展示站結帳可以選線上付款、超商取貨用電子地圖選門市、後台可以建立物流單
