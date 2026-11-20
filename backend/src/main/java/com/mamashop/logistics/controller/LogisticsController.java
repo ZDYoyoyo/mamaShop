@@ -1,6 +1,7 @@
 package com.mamashop.logistics.controller;
 
 import com.mamashop.common.config.OpenApiConfig;
+import com.mamashop.common.ecpay.EcpayReply;
 import com.mamashop.common.response.ApiResponse;
 import com.mamashop.logistics.dto.CvsMapFormResponse;
 import com.mamashop.logistics.dto.LogisticsOptionsResponse;
@@ -65,11 +66,11 @@ public class LogisticsController {
         return ResponseEntity.status(HttpStatus.SEE_OTHER).location(cvsMapService.handleMapReply(params)).build();
     }
 
-    /** 綠界的物流狀態通知（P03，伺服器對伺服器，不帶 JWT，用 MD5 簽章驗證）。回應是純文字 1|OK */
+    /** 綠界的物流狀態通知（P03，伺服器對伺服器，不帶 JWT，用 MD5 簽章驗證）。回應是純文字 1|OK（不看 Accept，見 {@link EcpayReply}） */
     @Operation(summary = "物流狀態通知（給綠界呼叫）")
     @PostMapping(path = "/api/logistics/ecpay/notify",
-            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE, produces = MediaType.TEXT_PLAIN_VALUE)
-    public String statusNotify(@RequestParam Map<String, String> params) {
-        return shipmentService.handleStatusNotification(params);
+            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+    public ResponseEntity<String> statusNotify(@RequestParam Map<String, String> params) {
+        return EcpayReply.plainText(shipmentService.handleStatusNotification(params));
     }
 }

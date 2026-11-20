@@ -249,6 +249,22 @@ class ShipmentIntegrationTest {
         assertThat(shipmentService.findShipment(orderNo).orElseThrow().statusCode()).isEqualTo(2067);
     }
 
+    /** 綠界通知帶的 Accept 不一定包含 text/plain：一樣要處理並回 1|OK（見 EcpayReply） */
+    @Test
+    void notification_isAccepted_whateverTheAcceptHeader() throws Exception {
+        String orderNo = processingOrder(CvsBrand.SEVEN);
+        String logisticsId = stubCreateSuccess("D8858182", "5656");
+        shipmentService.createShipment(orderNo, 1, customer.getId(), null);
+
+        Map<String, String> params = notificationParams(logisticsId, 2068, "賣家已到門市寄件", daysLater(1));
+        params.put("CheckMacValue", EcpayCheckMacValue.compute(params, HASH_KEY, HASH_IV, Algorithm.MD5));
+        mockMvc.perform(notification(params).header("Accept", "text/html"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_PLAIN))
+                .andExpect(content().string("1|OK"));
+        assertThat(status(orderNo)).isEqualTo(OrderStatus.SHIPPED);
+    }
+
     @Test
     void notification_pickedUpWithoutArrival_fillsInDelivered() throws Exception {
         String orderNo = processingOrder(CvsBrand.FAMILY);

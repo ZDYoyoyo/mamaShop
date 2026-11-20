@@ -1,6 +1,7 @@
 package com.mamashop.payment.controller;
 
 import com.mamashop.common.config.OpenApiConfig;
+import com.mamashop.common.ecpay.EcpayReply;
 import com.mamashop.common.response.ApiResponse;
 import com.mamashop.payment.dto.PaymentFormResponse;
 import com.mamashop.payment.dto.PaymentOptionsResponse;
@@ -12,6 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Size;
 import java.util.Map;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -50,12 +52,13 @@ public class PaymentController {
 
     /**
      * 綠界伺服器的付款結果通知（ReturnURL）。不用登入（綠界不會帶我們的 JWT），
-     * 改用檢查碼確認是綠界送的。格式是 form（application/x-www-form-urlencoded），回應是純文字 1|OK。
+     * 改用檢查碼確認是綠界送的。格式是 form（application/x-www-form-urlencoded），回應是純文字 1|OK
+     * （不管 Accept 是什麼都回純文字，原因見 {@link EcpayReply}）。
      */
     @Operation(summary = "綠界付款結果通知（給綠界呼叫）")
     @PostMapping(path = "/api/payments/ecpay/notify",
-            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE, produces = MediaType.TEXT_PLAIN_VALUE)
-    public String ecpayNotify(@RequestParam Map<String, String> params) {
-        return paymentService.handleEcpayNotification(params);
+            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+    public ResponseEntity<String> ecpayNotify(@RequestParam Map<String, String> params) {
+        return EcpayReply.plainText(paymentService.handleEcpayNotification(params));
     }
 }
